@@ -417,8 +417,8 @@ async function useConsumable(player, itemKey) {
   return { ok: false, message: "Este consumível ainda não tem efeito." };
 }
 
-async function sendCard(ctx, { fileId, caption, keyboard }) {
-  const opts = { parse_mode: "Markdown" };
+async function sendCard(ctx, { fileId, caption, keyboard, parse_mode = "Markdown" }) {
+  const opts = { parse_mode };
   if (keyboard) opts.reply_markup = Markup.inlineKeyboard(keyboard).reply_markup;
 
   if (fileId) {
@@ -2315,7 +2315,7 @@ bot.command("loja", async (ctx) => {
   
   const byGold = shopRes.rows.filter(s => s.currency === 'gold');
   const byArena = shopRes.rows.filter(s => s.currency === 'arena_coins');
-  const byDiamonds = shopRes.rows.filter(s => s.currency === 'diamonds');
+  const byTofus = shopRes.rows.filter(s => s.currency === 'tofus');
   
   const rarityEmoji = {
     common: "⚪",
@@ -2325,13 +2325,13 @@ bot.command("loja", async (ctx) => {
     legendary: "🟡"
   };
   
-  let msg = `🏪 **LOJA**\n\n`;
+  let msg = `🏪 <b>LOJA</b>\n\n`;
   msg += `💰 Seu Gold: ${player.gold}\n`;
   msg += `🎖️ Arena Coins: ${player.arena_coins}\n`;
-  msg += `💎 Diamonds: ${player.diamonds}\n\n`;
+  msg += `🧀 Tofus: ${player.tofus}\n\n`;
   
   if (byGold.length > 0) {
-    msg += `**💰 LOJA DE OURO:**\n`;
+    msg += `<b>💰 LOJA DE OURO:</b>\n`;
     byGold.forEach(item => {
       const emoji = rarityEmoji[item.rarity] || "⚪";
       msg += `${emoji} ${item.name} - ${item.buy_price} gold\n`;
@@ -2340,7 +2340,7 @@ bot.command("loja", async (ctx) => {
   }
   
   if (byArena.length > 0) {
-    msg += `**🎖️ LOJA DA ARENA:**\n`;
+    msg += `<b>🎖️ LOJA DA ARENA:</b>\n`;
     byArena.forEach(item => {
       const emoji = rarityEmoji[item.rarity] || "⚪";
       msg += `${emoji} ${item.name} - ${item.buy_price} fichas\n`;
@@ -2348,21 +2348,21 @@ bot.command("loja", async (ctx) => {
     msg += `\n`;
   }
   
-  if (byDiamonds.length > 0) {
-    msg += `**💎 LOJA PREMIUM:**\n`;
-    byDiamonds.forEach(item => {
+  if (byTofus.length > 0) {
+    msg += `<b>🧀 LOJA PREMIUM:</b>\n`;
+    byTofus.forEach(item => {
       const emoji = rarityEmoji[item.rarity] || "⚪";
-      msg += `${emoji} ${item.name} - ${item.buy_price} diamantes\n`;
+      msg += `${emoji} ${item.name} - ${item.buy_price} tofus\n`;
     });
     msg += `\n`;
   }
   
-  msg += `\n💡 **Comandos:**\n`;
-  msg += `• /comprar <item_key> <qty> - Comprar item\n`;
+  msg += `\n💡 <b>Comandos:</b>\n`;
+  msg += `• /comprar &lt;item_key&gt; &lt;qty&gt; - Comprar item\n`;
   msg += `• /vender - Ver itens para vender`;
   
   const keyboard = [[Markup.button.callback("🏠 Menu", "menu")]];
-  await sendCard(ctx, { caption: msg, keyboard });
+  await sendCard(ctx, { caption: msg, keyboard, parse_mode: 'HTML' });
 });
 
 // Action handler para o botão da loja no menu
@@ -2389,7 +2389,7 @@ bot.action("loja_menu", async (ctx) => {
   
   const byGold = shopRes.rows.filter(s => s.currency === 'gold');
   const byArena = shopRes.rows.filter(s => s.currency === 'arena_coins');
-  const byDiamonds = shopRes.rows.filter(s => s.currency === 'diamonds');
+  const byTofus = shopRes.rows.filter(s => s.currency === 'tofus');
   
   const rarityEmoji = {
     common: "⚪",
@@ -2399,13 +2399,13 @@ bot.action("loja_menu", async (ctx) => {
     legendary: "🟡"
   };
   
-  let msg = `🏪 **LOJA**\n\n`;
+  let msg = `🏪 <b>LOJA</b>\n\n`;
   msg += `💰 Seu Gold: ${player.gold}\n`;
   msg += `🎖️ Arena Coins: ${player.arena_coins}\n`;
-  msg += `💎 Diamonds: ${player.diamonds}\n\n`;
+  msg += `🧀 Tofus: ${player.tofus}\n\n`;
   
   if (byGold.length > 0) {
-    msg += `**💰 LOJA DE OURO:**\n`;
+    msg += `<b>💰 LOJA DE OURO:</b>\n`;
     byGold.forEach(item => {
       const emoji = rarityEmoji[item.rarity] || "⚪";
       msg += `${emoji} ${item.name} - ${item.buy_price} gold\n`;
@@ -2414,7 +2414,7 @@ bot.action("loja_menu", async (ctx) => {
   }
   
   if (byArena.length > 0) {
-    msg += `**🎖️ LOJA DA ARENA:**\n`;
+    msg += `<b>🎖️ LOJA DA ARENA:</b>\n`;
     byArena.forEach(item => {
       const emoji = rarityEmoji[item.rarity] || "⚪";
       msg += `${emoji} ${item.name} - ${item.buy_price} fichas\n`;
@@ -2422,21 +2422,21 @@ bot.action("loja_menu", async (ctx) => {
     msg += `\n`;
   }
   
-  if (byDiamonds.length > 0) {
-    msg += `**💎 LOJA PREMIUM:**\n`;
-    byDiamonds.forEach(item => {
+  if (byTofus.length > 0) {
+    msg += `<b>🧀 LOJA PREMIUM:</b>\n`;
+    byTofus.forEach(item => {
       const emoji = rarityEmoji[item.rarity] || "⚪";
-      msg += `${emoji} ${item.name} - ${item.buy_price} diamantes\n`;
+      msg += `${emoji} ${item.name} - ${item.buy_price} tofus\n`;
     });
     msg += `\n`;
   }
   
-  msg += `\n💡 **Comandos:**\n`;
-  msg += `• /comprar <item_key> <qty> - Comprar item\n`;
+  msg += `\n💡 <b>Comandos:</b>\n`;
+  msg += `• /comprar &lt;item_key&gt; &lt;qty&gt; - Comprar item\n`;
   msg += `• /vender - Ver itens para vender`;
   
   const keyboard = [[Markup.button.callback("🏠 Menu", "menu")]];
-  await sendCard(ctx, { caption: msg, keyboard });
+  await sendCard(ctx, { caption: msg, keyboard, parse_mode: 'HTML' });
   if (ctx.callbackQuery) ctx.answerCbQuery();
 });
 
@@ -2472,9 +2472,9 @@ bot.command("comprar", async (ctx) => {
   
   // Verifica moeda
   const currencyField = shopItem.currency === 'gold' ? 'gold' : 
-                        shopItem.currency === 'arena_coins' ? 'arena_coins' : 'diamonds';
+                        shopItem.currency === 'arena_coins' ? 'arena_coins' : 'tofus';
   const currencyName = shopItem.currency === 'gold' ? 'Gold' :
-                       shopItem.currency === 'arena_coins' ? 'Arena Coins' : 'Diamonds';
+                       shopItem.currency === 'arena_coins' ? 'Arena Coins' : 'Tofus';
   
   if (player[currencyField] < totalPrice) {
     return ctx.reply(`❌ Você não tem ${currencyName} suficiente!\n\nPreço: ${totalPrice} | Você tem: ${player[currencyField]}`);

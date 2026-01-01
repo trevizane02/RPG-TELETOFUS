@@ -179,7 +179,7 @@ export async function migrate() {
           temp_crit_buff INT NOT NULL DEFAULT 0,
           temp_buff_expires_at TIMESTAMPTZ,
           last_seen TIMESTAMPTZ DEFAULT now(),
-          diamonds INT NOT NULL DEFAULT 0,
+          tofus INT NOT NULL DEFAULT 0,
           vip_until TIMESTAMPTZ,
           trade_code TEXT,
           trade_expires_at TIMESTAMPTZ,
@@ -237,8 +237,8 @@ export async function migrate() {
           IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='players' AND column_name='last_seen') THEN
             ALTER TABLE players ADD COLUMN last_seen TIMESTAMPTZ DEFAULT now();
           END IF;
-          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='players' AND column_name='diamonds') THEN
-            ALTER TABLE players ADD COLUMN diamonds INT NOT NULL DEFAULT 0;
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='players' AND column_name='tofus') THEN
+            ALTER TABLE players ADD COLUMN tofus INT NOT NULL DEFAULT 0;
           END IF;
           IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='players' AND column_name='vip_until') THEN
             ALTER TABLE players ADD COLUMN vip_until TIMESTAMPTZ;
@@ -534,7 +534,7 @@ export async function migrate() {
         CREATE TABLE IF NOT EXISTS shop_items (
           id SERIAL PRIMARY KEY,
           item_key TEXT NOT NULL REFERENCES items(key),
-          currency TEXT NOT NULL, -- 'gold', 'arena_coins', 'diamonds'
+          currency TEXT NOT NULL, -- 'gold', 'arena_coins', 'tofus'
           buy_price INT, -- NULL = cannot buy
           sell_price INT, -- NULL = cannot sell
           stock INT DEFAULT -1, -- -1 = infinite
@@ -715,8 +715,10 @@ export async function migrate() {
       // SEED SHOP (Loja)
       const SHOP_SEEDS = [
         // Consumíveis (Gold)
-        { item_key: 'health_potion', currency: 'gold', buy_price: 50, sell_price: 15 },
-        { item_key: 'energy_potion', currency: 'gold', buy_price: 200, sell_price: 60 },
+        { item_key: 'health_potion', currency: 'gold', buy_price: 149, sell_price: 45 },
+        { item_key: 'health_potion', currency: 'arena_coins', buy_price: 100, sell_price: null },
+        { item_key: 'energy_potion', currency: 'gold', buy_price: 5000, sell_price: 1500 },
+        { item_key: 'energy_potion', currency: 'arena_coins', buy_price: 250, sell_price: null },
         { item_key: 'atk_tonic', currency: 'gold', buy_price: 150, sell_price: 40 },
         { item_key: 'def_tonic', currency: 'gold', buy_price: 150, sell_price: 40 },
         { item_key: 'crit_tonic', currency: 'gold', buy_price: 180, sell_price: 50 },
@@ -738,9 +740,9 @@ export async function migrate() {
         // Chave de Masmorra (Gold)
         { item_key: 'dungeon_key', currency: 'gold', buy_price: 500, sell_price: 150 },
         
-        // VIP/Premium (Diamonds - futuramente)
-        { item_key: 'amulet_health', currency: 'diamonds', buy_price: 100, sell_price: null },
-        { item_key: 'ring_protect', currency: 'diamonds', buy_price: 100, sell_price: null },
+        // VIP/Premium (Tofus - moeda premium)
+        { item_key: 'amulet_health', currency: 'tofus', buy_price: 100, sell_price: null },
+        { item_key: 'ring_protect', currency: 'tofus', buy_price: 100, sell_price: null },
       ];
       
       console.log("Seeding loja...");
