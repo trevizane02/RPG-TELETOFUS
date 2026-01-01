@@ -137,7 +137,12 @@ async function loadEventImages() {
   try {
     const res = await pool.query("SELECT event_key, file_id FROM event_images");
     for (const row of res.rows) {
-      EVENT_IMAGES[row.event_key] = row.file_id;
+      if (row.event_key && row.event_key.startsWith("shop_")) {
+        const k = row.event_key.replace("shop_", "");
+        SHOP_IMAGES[k] = row.file_id;
+      } else {
+        EVENT_IMAGES[row.event_key] = row.file_id;
+      }
     }
   } catch (err) {
     console.error("Erro ao carregar event_images:", err.message);
@@ -759,6 +764,17 @@ bot.command("seteventimg", async (ctx) => {
   ctx.reply(`Envie a imagem do evento *${key}* agora.`, { parse_mode: "Markdown" });
 });
 
+bot.command("setshopimg", async (ctx) => {
+  if (!isAdmin(ctx.from.id)) return ctx.reply("🚫 Apenas admin.");
+  const [, keyRaw] = ctx.message.text.split(" ");
+  const key = (keyRaw || "").toLowerCase();
+  if (!["vila", "matadores", "castelo"].includes(key)) {
+    return ctx.reply("Use /setshopimg <vila|matadores|castelo>");
+  }
+  pendingUploads.set(ctx.chat.id, { type: "shop", key });
+  ctx.reply(`Envie a imagem da loja *${key}* agora.`, { parse_mode: "Markdown" });
+});
+
 bot.command("checkimages", async (ctx) => {
   if (!isAdmin(ctx.from.id)) return ctx.reply("🚫 Apenas admin.");
   try {
@@ -861,6 +877,18 @@ bot.on("photo", async (ctx) => {
       [pending.key, fileId]
     );
     EVENT_IMAGES[pending.key] = fileId;
+    updated = true;
+  } else if (pending.type === "shop") {
+    const eventKey = `shop_${pending.key}`;
+    await pool.query(
+      `
+      INSERT INTO event_images (event_key, file_id, updated_at)
+      VALUES ($1, $2, NOW())
+      ON CONFLICT (event_key) DO UPDATE SET file_id = EXCLUDED.file_id, updated_at = NOW()
+    `,
+      [eventKey, fileId]
+    );
+    SHOP_IMAGES[pending.key] = fileId;
     updated = true;
   }
 
