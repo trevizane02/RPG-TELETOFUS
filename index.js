@@ -426,7 +426,7 @@ function formatPrice(amount, currency) {
 }
 
 function shopBalanceHtml(player) {
-  return escapeHtml(shopBalanceText(player)).replace(/\n/g, "<br>");
+  return escapeHtml(shopBalanceText(player));
 }
 
 function formatItemPreview(item) {
