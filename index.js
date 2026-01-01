@@ -93,6 +93,8 @@ let EVENT_IMAGES = {
   chest: process.env.CHEST_IMAGE_ID,
   trap: process.env.TRAP_IMAGE_ID,
   merchant: process.env.MERCHANT_IMAGE_ID,
+  loot_gold: process.env.LOOT_GOLD_IMAGE_ID,
+  loot_item: process.env.LOOT_ITEM_IMAGE_ID,
 };
 const SHOP_IMAGES = {
   vila: process.env.SHOP_IMG_VILA,
@@ -457,6 +459,16 @@ function formatItemPreview(item) {
   return parts.length ? ` (${parts.join(", ")})` : "";
 }
 
+function formatRolledStats(rolled) {
+  if (!rolled) return "";
+  const parts = [];
+  if (rolled.atk) parts.push(`ATK+${rolled.atk}`);
+  if (rolled.def) parts.push(`DEF+${rolled.def}`);
+  if (rolled.hp) parts.push(`HP+${rolled.hp}`);
+  if (rolled.crit) parts.push(`CRIT+${rolled.crit}`);
+  return parts.length ? ` (${parts.join(", ")})` : "";
+}
+
 async function renderShopHome(ctx, player) {
   const keyboard = [
     [Markup.button.callback("🏘️ Vila", "shop_open:vila"), Markup.button.callback("⚔️ Matadores", "shop_open:matadores")],
@@ -677,7 +689,7 @@ async function awardItem(playerId, item) {
     WHERE id = $1
   `, [playerId]);
   
-  return { success: true, stacked: false };
+  return { success: true, stacked: false, rolled };
 }
 
 function rollDamage(atk, def, isCrit = false) {
@@ -762,8 +774,8 @@ bot.command("seteventimg", async (ctx) => {
   if (!isAdmin(ctx.from.id)) return ctx.reply("🚫 Apenas admin.");
   const [, keyRaw] = ctx.message.text.split(" ");
   const key = (keyRaw || "").toLowerCase();
-  if (!["chest", "trap", "merchant"].includes(key)) {
-    return ctx.reply("Use /seteventimg <chest|trap|merchant>");
+  if (!["chest", "trap", "merchant", "loot_gold", "loot_item"].includes(key)) {
+    return ctx.reply("Use /seteventimg <chest|trap|merchant|loot_gold|loot_item>");
   }
   pendingUploads.set(ctx.chat.id, { type: "event", key });
   ctx.reply(`Envie a imagem do evento *${key}* agora.`, { parse_mode: "Markdown" });
@@ -1373,13 +1385,18 @@ async function handleAttack(ctx) {
     ]);
     
     let itemMsg = "";
+    let lootImage = fight.mobImage;
     if (item) {
       const result = await awardItem(player.id, item);
       if (result.success) {
-        itemMsg = `\n🎁 Item: ${item.name}`;
+        const statsText = result.rolled ? formatRolledStats(result.rolled) : "";
+        itemMsg = `\n🎁 Item: ${item.name}${statsText}`;
+        lootImage = item.image_file_id || EVENT_IMAGES.loot_item || lootImage;
       } else if (result.reason === 'inventory_full') {
         itemMsg = `\n❌ Inventário cheio (20/20)! Item ${item.name} foi perdido.`;
       }
+    } else if (fight.mobGold > 0 && EVENT_IMAGES.loot_gold) {
+      lootImage = EVENT_IMAGES.loot_gold;
     }
     
     await setPlayerState(player.id, STATES.MENU);
@@ -1389,7 +1406,7 @@ async function handleAttack(ctx) {
       `+${fight.mobXp} XP\n` +
       `+${fight.mobGold} Gold${itemMsg}`;
     await sendCard(ctx, {
-      fileId: fight.mobImage,
+      fileId: lootImage,
       caption: reward,
       keyboard: [[Markup.button.callback("⚔️ Caçar de novo", "action_hunt"), Markup.button.callback("🏠 Menu", "menu")]],
     });
