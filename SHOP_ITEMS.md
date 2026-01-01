@@ -45,3 +45,4 @@ Fonte: seeds em `migrate.js` (`SHOP_SEEDS`) e configuração de lojas (`SHOP_DEF
   - ring_protect — tofus — buy 100 — sell null
 
 Observação: só itens com `sell_price` diferente de `null` aparecem para o jogador vender; para permitir venda de outros (ex.: sabre, longbow etc.), defina um `sell_price` para eles.
+Obs: o NPC agora compra qualquer item por Gold; se não houver `sell_price` definido, usa um valor base pela raridade (common 25, uncommon 60, rare 120, epic 250, legendary 400).

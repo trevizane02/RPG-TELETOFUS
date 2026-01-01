@@ -429,6 +429,19 @@ function shopBalanceHtml(player) {
   return escapeHtml(shopBalanceText(player));
 }
 
+function computeSellPrice(row) {
+  // Prioriza preço da loja; se não houver, usa fallback por raridade
+  if (row.shop_sell_price !== null && row.shop_sell_price !== undefined) return Number(row.shop_sell_price);
+  const fallbackByRarity = { legendary: 400, epic: 250, rare: 120, uncommon: 60, common: 25 };
+  const rarity = row.rarity || "common";
+  const baseFallback = fallbackByRarity[rarity] || 20;
+  if (row.buy_price) {
+    const derived = Math.floor(Number(row.buy_price) * 0.35);
+    return Math.max(baseFallback, derived, 5);
+  }
+  return baseFallback;
+}
+
 function formatItemPreview(item) {
   const parts = [];
   if (item.atk_min || item.atk_max) parts.push(`ATK ${item.atk_min || 0}-${item.atk_max || 0}`);
@@ -2576,16 +2589,15 @@ bot.action("shop_selllist", async (ctx) => {
       inv.rolled_crit,
       i.name,
       i.rarity,
-      s.sell_price,
-      s.currency
+      s.sell_price AS shop_sell_price,
+      s.currency,
+      s.buy_price
     FROM inventory inv
     JOIN items i ON i.key = inv.item_key
-    LEFT JOIN shop_items s ON s.item_key = inv.item_key AND s.sell_price IS NOT NULL
+    LEFT JOIN shop_items s ON s.item_key = inv.item_key
     WHERE inv.player_id = $1
       AND inv.equipped = FALSE
-      AND s.sell_price IS NOT NULL
     ORDER BY i.rarity DESC, i.name
-    LIMIT 50
     `,
     [player.id]
   );
@@ -2597,10 +2609,14 @@ bot.action("shop_selllist", async (ctx) => {
   }
 
   const rarityEmoji = { common: "⚪", uncommon: "🟢", rare: "🔵", epic: "🟣", legendary: "🟡" };
-  const lines = invRes.rows.map(
-    (it) => `• ${rarityEmoji[it.rarity] || "⚪"} ${escapeHtml(it.name)} x${it.qty} — ${formatPrice(it.sell_price, it.currency || "gold")}`
-  );
-  const keyboard = invRes.rows.map((it) => [Markup.button.callback(`${it.name} (${it.sell_price})`, `shop_sell_item:${it.id}`)]);
+  const lines = invRes.rows.map((it) => {
+    const price = computeSellPrice(it);
+    return `• ${rarityEmoji[it.rarity] || "⚪"} ${escapeHtml(it.name)} x${it.qty} — ${formatPrice(price, "gold")}`;
+  });
+  const keyboard = invRes.rows.map((it) => {
+    const price = computeSellPrice(it);
+    return [Markup.button.callback(`${it.name} (${price})`, `shop_sell_item:${it.id}`)];
+  });
   keyboard.push([Markup.button.callback("⬅️ Lojas", "loja_menu")]);
 
   await ctx.reply(`<b>Vender itens</b>\nEscolha o item para vender:\n\n${lines.join("\n")}`, {
@@ -2616,10 +2632,10 @@ bot.action(/^shop_sell_item:([A-Za-z0-9_-]+)$/, async (ctx) => {
   const player = await getPlayer(userId, ctx.from.first_name);
   const res = await pool.query(
     `
-    SELECT inv.id, inv.qty, i.name, i.rarity, s.sell_price, s.currency
+    SELECT inv.id, inv.qty, i.name, i.rarity, s.sell_price AS shop_sell_price, s.currency, s.buy_price
     FROM inventory inv
     JOIN items i ON i.key = inv.item_key
-    LEFT JOIN shop_items s ON s.item_key = inv.item_key AND s.sell_price IS NOT NULL
+    LEFT JOIN shop_items s ON s.item_key = inv.item_key
     WHERE inv.id = $1 AND inv.player_id = $2 AND inv.equipped = FALSE
     `,
     [invId, player.id]
@@ -2630,17 +2646,18 @@ bot.action(/^shop_sell_item:([A-Za-z0-9_-]+)$/, async (ctx) => {
     return;
   }
   const item = res.rows[0];
-  const info = currencyLabel(item.currency || "gold");
+  const price = computeSellPrice(item);
+  const info = currencyLabel("gold");
   const keyboard = [
-    [Markup.button.callback(`Vender 1 (${info.icon}${item.sell_price})`, `shop_sell_do:${invId}:1`)],
+    [Markup.button.callback(`Vender 1 (${info.icon}${price})`, `shop_sell_do:${invId}:1`)],
   ];
   if (item.qty > 1) {
-    keyboard.push([Markup.button.callback(`Vender ${item.qty} (${info.icon}${item.sell_price * item.qty})`, `shop_sell_do:${invId}:${item.qty}`)]);
+    keyboard.push([Markup.button.callback(`Vender ${item.qty} (${info.icon}${price * item.qty})`, `shop_sell_do:${invId}:${item.qty}`)]);
   }
   keyboard.push([Markup.button.callback("⬅️ Itens", "shop_selllist"), Markup.button.callback("🏪 Lojas", "loja_menu")]);
 
   await ctx.reply(
-    `<b>Confirmar venda</b>\n${escapeHtml(item.name)} x${item.qty}\nRecebe: ${formatPrice(item.sell_price, item.currency || "gold")}`,
+    `<b>Confirmar venda</b>\n${escapeHtml(item.name)} x${item.qty}\nRecebe: ${formatPrice(price, "gold")}`,
     { parse_mode: "HTML", reply_markup: Markup.inlineKeyboard(keyboard).reply_markup }
   );
   if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
@@ -2654,10 +2671,10 @@ bot.action(/^shop_sell_do:([A-Za-z0-9_-]+):(\d+)$/, async (ctx) => {
 
   const res = await pool.query(
     `
-    SELECT inv.id, inv.qty, i.name, s.sell_price, s.currency
+    SELECT inv.id, inv.qty, i.name, i.rarity, s.sell_price AS shop_sell_price, s.currency, s.buy_price
     FROM inventory inv
     JOIN items i ON i.key = inv.item_key
-    LEFT JOIN shop_items s ON s.item_key = inv.item_key AND s.sell_price IS NOT NULL
+    LEFT JOIN shop_items s ON s.item_key = inv.item_key
     WHERE inv.id = $1 AND inv.player_id = $2 AND inv.equipped = FALSE
     `,
     [invId, player.id]
@@ -2668,14 +2685,15 @@ bot.action(/^shop_sell_do:([A-Za-z0-9_-]+):(\d+)$/, async (ctx) => {
     return;
   }
   const item = res.rows[0];
+  const price = computeSellPrice(item);
   if (qty > item.qty) {
     await ctx.reply(`❌ Você só tem ${item.qty} desse item.`);
     if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
     return;
   }
 
-  const total = item.sell_price * qty;
-  const info = currencyLabel(item.currency || "gold");
+  const total = price * qty;
+  const info = currencyLabel("gold");
   await pool.query(
     qty >= item.qty ? "DELETE FROM inventory WHERE id = $1" : "UPDATE inventory SET qty = qty - $1 WHERE id = $2",
     qty >= item.qty ? [invId] : [qty, invId]
