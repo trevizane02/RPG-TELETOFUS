@@ -2610,7 +2610,7 @@ bot.action("shop_selllist", async (ctx) => {
   if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
 });
 
-bot.action(/^shop_sell_item:(\d+)$/, async (ctx) => {
+bot.action(/^shop_sell_item:([A-Za-z0-9_-]+)$/, async (ctx) => {
   const invId = ctx.match[1];
   const userId = String(ctx.from.id);
   const player = await getPlayer(userId, ctx.from.first_name);
@@ -2646,7 +2646,7 @@ bot.action(/^shop_sell_item:(\d+)$/, async (ctx) => {
   if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
 });
 
-bot.action(/^shop_sell_do:(\d+):(\d+)$/, async (ctx) => {
+bot.action(/^shop_sell_do:([A-Za-z0-9_-]+):(\d+)$/, async (ctx) => {
   const invId = ctx.match[1];
   const qty = Math.max(1, parseInt(ctx.match[2], 10) || 1);
   const userId = String(ctx.from.id);
