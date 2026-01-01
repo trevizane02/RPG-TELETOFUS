@@ -486,7 +486,7 @@ async function renderShopItemDetail(ctx, player, shopKey, itemKey) {
   }
   const res = await pool.query(
     `
-    SELECT s.*, i.name, i.slot, i.rarity, i.description,
+    SELECT s.*, i.name, i.slot, i.rarity,
            i.atk_min, i.atk_max, i.def_min, i.def_max, i.hp_min, i.hp_max, i.crit_min, i.crit_max
     FROM shop_items s
     JOIN items i ON i.key = s.item_key
