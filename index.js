@@ -50,6 +50,21 @@ const CLASS_WEAPONS = {
   mago: ["novice_rod", "mage_staff", "arcane_wand", "crystal_staff"],
 };
 
+const SHOP_DEFS = {
+  vila: {
+    name: "Loja da Vila",
+    items: ["health_potion", "energy_potion", "atk_tonic", "def_tonic", "crit_tonic", "dungeon_key", "novice_rod", "hunting_bow", "short_sword", "wooden_shield", "leather_armor"],
+  },
+  matadores: {
+    name: "Loja dos Matadores",
+    items: ["sabre", "battle_axe", "longbow", "crossbow", "mage_staff", "arcane_wand", "plate_armor", "steel_shield", "tower_shield"],
+  },
+  castelo: {
+    name: "Loja do Castelo",
+    items: ["knight_blade", "crystal_staff", "amulet_health", "ring_protect"],
+  },
+};
+
 const RARITY_ROLL = {
   common: [0.35, 0.65],
   uncommon: [0.55, 0.85],
@@ -78,6 +93,11 @@ let EVENT_IMAGES = {
   chest: process.env.CHEST_IMAGE_ID,
   trap: process.env.TRAP_IMAGE_ID,
   merchant: process.env.MERCHANT_IMAGE_ID,
+};
+const SHOP_IMAGES = {
+  vila: process.env.SHOP_IMG_VILA,
+  matadores: process.env.SHOP_IMG_MATADORES,
+  castelo: process.env.SHOP_IMG_CASTELO,
 };
 
 function makeGreenBar(current, max, size = 10) {
@@ -364,6 +384,129 @@ async function getOnlineStats() {
     total: Number(totalRes.rows[0]?.total || 0),
     byMap: byMap.rows,
   };
+}
+
+function escapeHtml(str = "") {
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+async function getShopItemsByKey(shopKey) {
+  const def = SHOP_DEFS[shopKey];
+  if (!def) return [];
+  const res = await pool.query(
+    `
+    SELECT 
+      s.item_key, s.currency, s.buy_price, s.sell_price, s.stock, s.available,
+      i.name, i.rarity, i.slot
+    FROM shop_items s
+    JOIN items i ON i.key = s.item_key
+    WHERE s.available = TRUE
+      AND s.buy_price IS NOT NULL
+      AND s.item_key = ANY($1)
+    ORDER BY s.currency, i.rarity DESC, i.name
+    `,
+    [def.items]
+  );
+  return res.rows;
+}
+
+function shopBalanceText(player) {
+  return `💰 Gold: ${player.gold}\n🎖️ Arena Coins: ${player.arena_coins}\n🧀 Tofus: ${player.tofus || 0}`;
+}
+
+function currencyLabel(cur) {
+  if (cur === "arena_coins") return { label: "Arena Coins", icon: "🎖️", field: "arena_coins" };
+  if (cur === "tofus") return { label: "Tofus", icon: "🧀", field: "tofus" };
+  return { label: "Gold", icon: "💰", field: "gold" };
+}
+
+function formatPrice(amount, currency) {
+  const info = currencyLabel(currency);
+  return `${info.icon} ${amount} ${info.label}`;
+}
+
+function shopBalanceHtml(player) {
+  return escapeHtml(shopBalanceText(player)).replace(/\n/g, "<br>");
+}
+
+function formatItemPreview(item) {
+  const parts = [];
+  if (item.atk_min || item.atk_max) parts.push(`ATK ${item.atk_min || 0}-${item.atk_max || 0}`);
+  if (item.def_min || item.def_max) parts.push(`DEF ${item.def_min || 0}-${item.def_max || 0}`);
+  if (item.hp_min || item.hp_max) parts.push(`HP ${item.hp_min || 0}-${item.hp_max || 0}`);
+  if (item.crit_min || item.crit_max) parts.push(`CRIT ${item.crit_min || 0}-${item.crit_max || 0}`);
+  return parts.length ? ` (${parts.join(", ")})` : "";
+}
+
+async function renderShopHome(ctx, player) {
+  const keyboard = [
+    [Markup.button.callback("🏘️ Vila", "shop_open:vila"), Markup.button.callback("⚔️ Matadores", "shop_open:matadores")],
+    [Markup.button.callback("🏰 Castelo", "shop_open:castelo")],
+    [Markup.button.callback("🏠 Menu", "menu")],
+  ];
+  const text = `<b>🏪 Lojas</b>\n\nEscolha uma loja:\n${shopBalanceHtml(player)}`;
+  return ctx.reply(text, { parse_mode: "HTML", reply_markup: Markup.inlineKeyboard(keyboard).reply_markup });
+}
+
+async function renderShopView(ctx, player, shopKey) {
+  const def = SHOP_DEFS[shopKey];
+  if (!def) {
+    return ctx.reply("❌ Loja não encontrada.");
+  }
+  const keyboard = [
+    [Markup.button.callback("🛒 Comprar", `shop_buylist:${shopKey}`), Markup.button.callback("💰 Vender", "shop_selllist")],
+    [Markup.button.callback("⬅️ Lojas", "loja_menu"), Markup.button.callback("🏠 Menu", "menu")],
+  ];
+  const caption = `<b>${escapeHtml(def.name)}</b>\n${shopBalanceHtml(player)}\n\nEscolha uma opção.`;
+  const fileId = SHOP_IMAGES[shopKey];
+  if (fileId) {
+    return sendCard(ctx, { fileId, caption, keyboard, parse_mode: "HTML" });
+  }
+  return ctx.reply(caption, { parse_mode: "HTML", reply_markup: Markup.inlineKeyboard(keyboard).reply_markup });
+}
+
+async function renderShopBuyList(ctx, player, shopKey) {
+  const def = SHOP_DEFS[shopKey];
+  if (!def) return ctx.reply("❌ Loja não encontrada.");
+  const items = await getShopItemsByKey(shopKey);
+  if (!items.length) {
+    return ctx.reply("Nenhum item disponível nesta loja agora.");
+  }
+  const lines = items.map((i) => `• ${escapeHtml(i.name)} — ${formatPrice(i.buy_price, i.currency)}`);
+  const keyboard = items.map((i) => [Markup.button.callback(`${i.name} (${i.buy_price})`, `shop_item:${shopKey}:${i.item_key}`)]);
+  keyboard.push([Markup.button.callback("⬅️ Loja", `shop_open:${shopKey}`)]);
+  const text = `<b>${escapeHtml(def.name)}</b>\n🛒 <b>Comprar</b>\n\n${lines.join("\n")}`;
+  return ctx.reply(text, { parse_mode: "HTML", reply_markup: Markup.inlineKeyboard(keyboard).reply_markup });
+}
+
+async function renderShopItemDetail(ctx, player, shopKey, itemKey) {
+  const def = SHOP_DEFS[shopKey];
+  if (!def || !def.items.includes(itemKey)) {
+    return ctx.reply("❌ Item indisponível nesta loja.");
+  }
+  const res = await pool.query(
+    `
+    SELECT s.*, i.name, i.slot, i.rarity, i.description,
+           i.atk_min, i.atk_max, i.def_min, i.def_max, i.hp_min, i.hp_max, i.crit_min, i.crit_max
+    FROM shop_items s
+    JOIN items i ON i.key = s.item_key
+    WHERE s.item_key = $1 AND s.available = TRUE AND s.buy_price IS NOT NULL
+    `,
+    [itemKey]
+  );
+  if (!res.rows.length) return ctx.reply("❌ Item não encontrado ou indisponível.");
+  const item = res.rows[0];
+  const priceText = formatPrice(item.buy_price, item.currency);
+  const stockText = item.stock ? `Estoque: ${item.stock}` : "Estoque: ∞";
+  const stats = formatItemPreview(item);
+  const info = currencyLabel(item.currency);
+  const detail = `<b>${escapeHtml(item.name)}</b>${stats}\nPreço: ${priceText}\n${stockText}\n\n${shopBalanceHtml(player)}`;
+  const keyboard = [
+    [Markup.button.callback(`Comprar 1 (${info.icon}${item.buy_price})`, `shop_buy:${shopKey}:${itemKey}:1`)],
+    [Markup.button.callback(`Comprar 5 (${info.icon}${item.buy_price * 5})`, `shop_buy:${shopKey}:${itemKey}:5`)],
+    [Markup.button.callback("⬅️ Voltar", `shop_buylist:${shopKey}`), Markup.button.callback("🏪 Lojas", "loja_menu")],
+  ];
+  return ctx.reply(detail, { parse_mode: "HTML", reply_markup: Markup.inlineKeyboard(keyboard).reply_markup });
 }
 
 async function useConsumable(player, itemKey) {
@@ -2295,244 +2438,134 @@ bot.action(/equip_(.+)/, async (ctx) => {
 bot.command("loja", async (ctx) => {
   const userId = String(ctx.from.id);
   const player = await getPlayer(userId, ctx.from.first_name);
-  
-  // Busca itens da loja agrupados por moeda
-  const shopRes = await pool.query(`
-    SELECT 
-      s.id, 
-      s.item_key, 
-      s.currency, 
-      s.buy_price, 
-      s.sell_price,
-      i.name,
-      i.rarity,
-      i.slot
-    FROM shop_items s
-    JOIN items i ON i.key = s.item_key
-    WHERE s.available = TRUE AND s.buy_price IS NOT NULL
-    ORDER BY s.currency, i.rarity DESC, i.name
-  `);
-  
-  const byGold = shopRes.rows.filter(s => s.currency === 'gold');
-  const byArena = shopRes.rows.filter(s => s.currency === 'arena_coins');
-  const byTofus = shopRes.rows.filter(s => s.currency === 'tofus');
-  
-  const rarityEmoji = {
-    common: "⚪",
-    uncommon: "🟢",
-    rare: "🔵",
-    epic: "🟣",
-    legendary: "🟡"
-  };
-  
-  let msg = `🏪 <b>LOJA</b>\n\n`;
-  msg += `💰 Seu Gold: ${player.gold}\n`;
-  msg += `🎖️ Arena Coins: ${player.arena_coins}\n`;
-  msg += `🧀 Tofus: ${player.tofus}\n\n`;
-  
-  if (byGold.length > 0) {
-    msg += `<b>💰 LOJA DE OURO:</b>\n`;
-    byGold.forEach(item => {
-      const emoji = rarityEmoji[item.rarity] || "⚪";
-      msg += `${emoji} ${item.name} - ${item.buy_price} gold\n`;
-    });
-    msg += `\n`;
-  }
-  
-  if (byArena.length > 0) {
-    msg += `<b>🎖️ LOJA DA ARENA:</b>\n`;
-    byArena.forEach(item => {
-      const emoji = rarityEmoji[item.rarity] || "⚪";
-      msg += `${emoji} ${item.name} - ${item.buy_price} fichas\n`;
-    });
-    msg += `\n`;
-  }
-  
-  if (byTofus.length > 0) {
-    msg += `<b>🧀 LOJA PREMIUM:</b>\n`;
-    byTofus.forEach(item => {
-      const emoji = rarityEmoji[item.rarity] || "⚪";
-      msg += `${emoji} ${item.name} - ${item.buy_price} tofus\n`;
-    });
-    msg += `\n`;
-  }
-  
-  msg += `\n💡 <b>Comandos:</b>\n`;
-  msg += `• /comprar &lt;item_key&gt; &lt;qty&gt; - Comprar item\n`;
-  msg += `• /vender - Ver itens para vender`;
-  
-  const keyboard = [[Markup.button.callback("🏠 Menu", "menu")]];
-  await sendCard(ctx, { caption: msg, keyboard, parse_mode: 'HTML' });
+  await renderShopHome(ctx, player);
 });
 
-// Action handler para o botão da loja no menu
+bot.command(["comprar", "vender"], async (ctx) => {
+  const userId = String(ctx.from.id);
+  const player = await getPlayer(userId, ctx.from.first_name);
+  await renderShopHome(ctx, player);
+  await ctx.reply("Use os botões da loja para comprar ou vender itens.", { reply_markup: Markup.inlineKeyboard([[Markup.button.callback("🏪 Abrir lojas", "loja_menu")]]).reply_markup });
+});
+
 bot.action("loja_menu", async (ctx) => {
   const userId = String(ctx.from.id);
   const player = await getPlayer(userId, ctx.from.first_name);
-  
-  // Busca itens da loja agrupados por moeda
-  const shopRes = await pool.query(`
-    SELECT 
-      s.id, 
-      s.item_key, 
-      s.currency, 
-      s.buy_price, 
-      s.sell_price,
-      i.name,
-      i.rarity,
-      i.slot
-    FROM shop_items s
-    JOIN items i ON i.key = s.item_key
-    WHERE s.available = TRUE AND s.buy_price IS NOT NULL
-    ORDER BY s.currency, i.rarity DESC, i.name
-  `);
-  
-  const byGold = shopRes.rows.filter(s => s.currency === 'gold');
-  const byArena = shopRes.rows.filter(s => s.currency === 'arena_coins');
-  const byTofus = shopRes.rows.filter(s => s.currency === 'tofus');
-  
-  const rarityEmoji = {
-    common: "⚪",
-    uncommon: "🟢",
-    rare: "🔵",
-    epic: "🟣",
-    legendary: "🟡"
-  };
-  
-  let msg = `🏪 <b>LOJA</b>\n\n`;
-  msg += `💰 Seu Gold: ${player.gold}\n`;
-  msg += `🎖️ Arena Coins: ${player.arena_coins}\n`;
-  msg += `🧀 Tofus: ${player.tofus}\n\n`;
-  
-  if (byGold.length > 0) {
-    msg += `<b>💰 LOJA DE OURO:</b>\n`;
-    byGold.forEach(item => {
-      const emoji = rarityEmoji[item.rarity] || "⚪";
-      msg += `${emoji} ${item.name} - ${item.buy_price} gold\n`;
-    });
-    msg += `\n`;
-  }
-  
-  if (byArena.length > 0) {
-    msg += `<b>🎖️ LOJA DA ARENA:</b>\n`;
-    byArena.forEach(item => {
-      const emoji = rarityEmoji[item.rarity] || "⚪";
-      msg += `${emoji} ${item.name} - ${item.buy_price} fichas\n`;
-    });
-    msg += `\n`;
-  }
-  
-  if (byTofus.length > 0) {
-    msg += `<b>🧀 LOJA PREMIUM:</b>\n`;
-    byTofus.forEach(item => {
-      const emoji = rarityEmoji[item.rarity] || "⚪";
-      msg += `${emoji} ${item.name} - ${item.buy_price} tofus\n`;
-    });
-    msg += `\n`;
-  }
-  
-  msg += `\n💡 <b>Comandos:</b>\n`;
-  msg += `• /comprar &lt;item_key&gt; &lt;qty&gt; - Comprar item\n`;
-  msg += `• /vender - Ver itens para vender`;
-  
-  const keyboard = [[Markup.button.callback("🏠 Menu", "menu")]];
-  await sendCard(ctx, { caption: msg, keyboard, parse_mode: 'HTML' });
-  if (ctx.callbackQuery) ctx.answerCbQuery();
+  await renderShopHome(ctx, player);
+  if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
 });
 
-bot.command("comprar", async (ctx) => {
+bot.action(/^shop_open:(.+)$/, async (ctx) => {
+  const shopKey = ctx.match[1];
   const userId = String(ctx.from.id);
   const player = await getPlayer(userId, ctx.from.first_name);
-  const args = ctx.message.text.split(' ');
-  const itemKey = args[1];
-  const qty = parseInt(args[2]) || 1;
-  
-  if (!itemKey) {
-    return ctx.reply('❌ Use: /comprar <item_key> <quantidade>\n\nEx: /comprar health_potion 5');
+  await renderShopView(ctx, player, shopKey);
+  if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
+});
+
+bot.action(/^shop_buylist:(.+)$/, async (ctx) => {
+  const shopKey = ctx.match[1];
+  const userId = String(ctx.from.id);
+  const player = await getPlayer(userId, ctx.from.first_name);
+  await renderShopBuyList(ctx, player, shopKey);
+  if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
+});
+
+bot.action(/^shop_item:([^:]+):([^:]+)$/, async (ctx) => {
+  const [, shopKey, itemKey] = ctx.match;
+  const userId = String(ctx.from.id);
+  const player = await getPlayer(userId, ctx.from.first_name);
+  await renderShopItemDetail(ctx, player, shopKey, itemKey);
+  if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
+});
+
+bot.action(/^shop_buy:([^:]+):([^:]+):(\d+)$/, async (ctx) => {
+  const [, shopKey, itemKey, qtyRaw] = ctx.match;
+  const qty = Math.max(1, Math.min(20, parseInt(qtyRaw, 10) || 1));
+  const userId = String(ctx.from.id);
+  const player = await getPlayer(userId, ctx.from.first_name);
+
+  const def = SHOP_DEFS[shopKey];
+  if (!def || !def.items.includes(itemKey)) {
+    if (ctx.callbackQuery) ctx.answerCbQuery("Item indisponível").catch(() => {});
+    return;
   }
-  
-  if (qty < 1 || qty > 99) {
-    return ctx.reply('❌ Quantidade deve ser entre 1 e 99.');
-  }
-  
-  // Busca item na loja
-  const shopRes = await pool.query(`
+
+  const res = await pool.query(
+    `
     SELECT s.*, i.name, i.slot, i.rarity, i.atk_min, i.atk_max, i.def_min, i.def_max, i.hp_min, i.hp_max, i.crit_min, i.crit_max
     FROM shop_items s
     JOIN items i ON i.key = s.item_key
     WHERE s.item_key = $1 AND s.available = TRUE AND s.buy_price IS NOT NULL
-  `, [itemKey]);
-  
-  if (shopRes.rows.length === 0) {
-    return ctx.reply('❌ Item não encontrado na loja ou indisponível.');
+    `,
+    [itemKey]
+  );
+  if (!res.rows.length) {
+    await ctx.reply("❌ Item não encontrado ou indisponível.");
+    return;
   }
-  
-  const shopItem = shopRes.rows[0];
-  const totalPrice = shopItem.buy_price * qty;
-  
-  // Verifica moeda
-  const currencyField = shopItem.currency === 'gold' ? 'gold' : 
-                        shopItem.currency === 'arena_coins' ? 'arena_coins' : 'tofus';
-  const currencyName = shopItem.currency === 'gold' ? 'Gold' :
-                       shopItem.currency === 'arena_coins' ? 'Arena Coins' : 'Tofus';
-  
-  if (player[currencyField] < totalPrice) {
-    return ctx.reply(`❌ Você não tem ${currencyName} suficiente!\n\nPreço: ${totalPrice} | Você tem: ${player[currencyField]}`);
+  const item = res.rows[0];
+  const currencyInfo = currencyLabel(item.currency);
+  const currencyField = currencyInfo.field;
+  const balance = Number(player[currencyField] || 0);
+  const totalPrice = item.buy_price * qty;
+
+  if (balance < totalPrice) {
+    await ctx.reply(`❌ Saldo insuficiente.\nNecessário: ${totalPrice} ${currencyInfo.label}\nVocê: ${balance} ${currencyInfo.label}`);
+    return;
   }
-  
-  // Verifica slots (só para não-consumíveis)
-  if (shopItem.slot !== 'consumable') {
-    const slotsRes = await pool.query(`
-      SELECT COUNT(*) as used
+
+  if (item.slot !== "consumable") {
+    const slotsRes = await pool.query(
+      `
+      SELECT COUNT(*)::int AS used
       FROM inventory
       WHERE player_id = $1 AND equipped = FALSE
-    `, [player.id]);
-    
-    const slotsUsed = parseInt(slotsRes.rows[0].used);
+    `,
+      [player.id]
+    );
+    const slotsUsed = Number(slotsRes.rows[0]?.used || 0);
     const slotsMax = player.inventory_slots_max || 20;
-    
     if (slotsUsed + qty > slotsMax) {
-      return ctx.reply(`❌ Inventário cheio! (${slotsUsed}/${slotsMax})\n\nEste item ocuparia ${qty} slots.`);
+      await ctx.reply(`❌ Inventário cheio! (${slotsUsed}/${slotsMax}). Este item ocuparia ${qty} slot(s).`);
+      return;
     }
   }
-  
-  // Deduz moeda
-  await pool.query(`
-    UPDATE players
-    SET ${currencyField} = ${currencyField} - $1
-    WHERE id = $2
-  `, [totalPrice, player.id]);
-  
-  // Adiciona itens
+
+  if (item.stock !== null && item.stock !== undefined) {
+    if (Number(item.stock) < qty) {
+      await ctx.reply(`❌ Estoque insuficiente. Restam ${item.stock}.`);
+      return;
+    }
+  }
+
+  await pool.query(`UPDATE players SET ${currencyField} = ${currencyField} - $1 WHERE id = $2`, [totalPrice, player.id]);
+
   for (let i = 0; i < qty; i++) {
-    const result = await awardItem(player.id, shopItem);
+    const result = await awardItem(player.id, { ...item, key: item.item_key });
     if (!result.success) {
-      // Reembolsa se falhar
-      await pool.query(`
-        UPDATE players
-        SET ${currencyField} = ${currencyField} + $1
-        WHERE id = $2
-      `, [shopItem.buy_price * (qty - i), player.id]);
-      
-      return ctx.reply(`❌ Erro ao adicionar item! ${currencyName} reembolsado.`);
+      await pool.query(`UPDATE players SET ${currencyField} = ${currencyField} + $1 WHERE id = $2`, [item.buy_price * (qty - i), player.id]);
+      await ctx.reply("❌ Erro ao adicionar item. Valor reembolsado.");
+      return;
     }
   }
-  
+
+  if (item.stock !== null && item.stock !== undefined) {
+    await pool.query("UPDATE shop_items SET stock = stock - $1 WHERE item_key = $2 AND stock IS NOT NULL", [qty, itemKey]);
+  }
+
   await ctx.reply(
-    `✅ **Compra realizada!**\n\n` +
-    `📦 ${shopItem.name} x${qty}\n` +
-    `💰 -${totalPrice} ${currencyName}\n\n` +
-    `Saldo: ${player[currencyField] - totalPrice} ${currencyName}`,
-    { parse_mode: 'Markdown' }
+    `✅ Compra realizada!\n${escapeHtml(item.name)} x${qty}\n-${formatPrice(totalPrice, item.currency)}`,
+    { parse_mode: "HTML", reply_markup: Markup.inlineKeyboard([[Markup.button.callback("⬅️ Loja", `shop_open:${shopKey}`)]]) }
   );
+  if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
 });
 
-bot.command("vender", async (ctx) => {
+bot.action("shop_selllist", async (ctx) => {
   const userId = String(ctx.from.id);
   const player = await getPlayer(userId, ctx.from.first_name);
-  
-  // Lista itens que podem ser vendidos (não equipados)
-  const invRes = await pool.query(`
+  const invRes = await pool.query(
+    `
     SELECT 
       inv.id,
       inv.item_key,
@@ -2541,110 +2574,115 @@ bot.command("vender", async (ctx) => {
       inv.rolled_def,
       inv.rolled_hp,
       inv.rolled_crit,
-      inv.rolled_rarity,
       i.name,
-      i.slot,
       i.rarity,
-      s.sell_price
+      s.sell_price,
+      s.currency
     FROM inventory inv
     JOIN items i ON i.key = inv.item_key
-    LEFT JOIN shop_items s ON s.item_key = inv.item_key AND s.currency = 'gold'
+    LEFT JOIN shop_items s ON s.item_key = inv.item_key AND s.sell_price IS NOT NULL
     WHERE inv.player_id = $1
-    AND inv.equipped = FALSE
-    AND s.sell_price IS NOT NULL
+      AND inv.equipped = FALSE
+      AND s.sell_price IS NOT NULL
     ORDER BY i.rarity DESC, i.name
-  `, [player.id]);
-  
-  if (invRes.rows.length === 0) {
-    return ctx.reply('❌ Você não tem itens para vender.');
+    LIMIT 50
+    `,
+    [player.id]
+  );
+
+  if (!invRes.rows.length) {
+    await ctx.reply("❌ Você não tem itens vendáveis (não equipados).");
+    if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
+    return;
   }
-  
-  const rarityEmoji = {
-    common: "⚪",
-    uncommon: "🟢",
-    rare: "🔵",
-    epic: "🟣",
-    legendary: "🟡"
-  };
-  
-  let msg = `💰 **VENDER ITENS**\n\n`;
-  
-  invRes.rows.forEach((item, idx) => {
-    const emoji = rarityEmoji[item.rarity] || "⚪";
-    const rolled = [];
-    if (item.rolled_atk) rolled.push(`ATK+${item.rolled_atk}`);
-    if (item.rolled_def) rolled.push(`DEF+${item.rolled_def}`);
-    if (item.rolled_hp) rolled.push(`HP+${item.rolled_hp}`);
-    if (item.rolled_crit) rolled.push(`CRIT+${item.rolled_crit}`);
-    const statsText = rolled.length ? ` (${rolled.join(", ")})` : "";
-    const qtyText = item.qty > 1 ? ` x${item.qty}` : "";
-    
-    msg += `${idx + 1}. ${emoji} ${item.name}${qtyText}${statsText}\n`;
-    msg += `   💰 Vende por: ${item.sell_price} gold\n\n`;
+
+  const rarityEmoji = { common: "⚪", uncommon: "🟢", rare: "🔵", epic: "🟣", legendary: "🟡" };
+  const lines = invRes.rows.map(
+    (it) => `• ${rarityEmoji[it.rarity] || "⚪"} ${escapeHtml(it.name)} x${it.qty} — ${formatPrice(it.sell_price, it.currency || "gold")}`
+  );
+  const keyboard = invRes.rows.map((it) => [Markup.button.callback(`${it.name} (${it.sell_price})`, `shop_sell_item:${it.id}`)]);
+  keyboard.push([Markup.button.callback("⬅️ Lojas", "loja_menu")]);
+
+  await ctx.reply(`<b>Vender itens</b>\nEscolha o item para vender:\n\n${lines.join("\n")}`, {
+    parse_mode: "HTML",
+    reply_markup: Markup.inlineKeyboard(keyboard).reply_markup,
   });
-  
-  msg += `💡 Use: /vender_confirmar <número> <qty>`;
-  
-  // Guarda lista temporária (simplificado - em produção, use session)
-  ctx.session = ctx.session || {};
-  ctx.session.sellList = invRes.rows;
-  
-  await ctx.reply(msg, { parse_mode: 'Markdown' });
+  if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
 });
 
-bot.command("vender_confirmar", async (ctx) => {
+bot.action(/^shop_sell_item:(\d+)$/, async (ctx) => {
+  const invId = ctx.match[1];
   const userId = String(ctx.from.id);
   const player = await getPlayer(userId, ctx.from.first_name);
-  const args = ctx.message.text.split(' ');
-  const itemNum = parseInt(args[1]);
-  const qty = parseInt(args[2]) || 1;
-  
-  if (!itemNum) {
-    return ctx.reply('❌ Use: /vender_confirmar <número> <quantidade>');
-  }
-  
-  // TODO: Implementar sessão real (Redis/DB)
-  // Por agora, busca diretamente
-  const invRes = await pool.query(`
-    SELECT 
-      inv.id,
-      inv.qty,
-      i.name,
-      s.sell_price
+  const res = await pool.query(
+    `
+    SELECT inv.id, inv.qty, i.name, i.rarity, s.sell_price, s.currency
     FROM inventory inv
     JOIN items i ON i.key = inv.item_key
-    LEFT JOIN shop_items s ON s.item_key = inv.item_key AND s.currency = 'gold'
-    WHERE inv.player_id = $1
-    AND inv.equipped = FALSE
-    AND s.sell_price IS NOT NULL
-    ORDER BY i.rarity DESC, i.name
-    LIMIT 1 OFFSET $2
-  `, [player.id, itemNum - 1]);
-  
-  if (invRes.rows.length === 0) {
-    return ctx.reply('❌ Item não encontrado.');
+    LEFT JOIN shop_items s ON s.item_key = inv.item_key AND s.sell_price IS NOT NULL
+    WHERE inv.id = $1 AND inv.player_id = $2 AND inv.equipped = FALSE
+    `,
+    [invId, player.id]
+  );
+  if (!res.rows.length) {
+    await ctx.reply("❌ Item não encontrado ou não vendável.");
+    if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
+    return;
   }
-  
-  const item = invRes.rows[0];
-  
+  const item = res.rows[0];
+  const info = currencyLabel(item.currency || "gold");
+  const keyboard = [
+    [Markup.button.callback(`Vender 1 (${info.icon}${item.sell_price})`, `shop_sell_do:${invId}:1`)],
+  ];
+  if (item.qty > 1) {
+    keyboard.push([Markup.button.callback(`Vender ${item.qty} (${info.icon}${item.sell_price * item.qty})`, `shop_sell_do:${invId}:${item.qty}`)]);
+  }
+  keyboard.push([Markup.button.callback("⬅️ Itens", "shop_selllist"), Markup.button.callback("🏪 Lojas", "loja_menu")]);
+
+  await ctx.reply(
+    `<b>Confirmar venda</b>\n${escapeHtml(item.name)} x${item.qty}\nRecebe: ${formatPrice(item.sell_price, item.currency || "gold")}`,
+    { parse_mode: "HTML", reply_markup: Markup.inlineKeyboard(keyboard).reply_markup }
+  );
+  if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
+});
+
+bot.action(/^shop_sell_do:(\d+):(\d+)$/, async (ctx) => {
+  const invId = ctx.match[1];
+  const qty = Math.max(1, parseInt(ctx.match[2], 10) || 1);
+  const userId = String(ctx.from.id);
+  const player = await getPlayer(userId, ctx.from.first_name);
+
+  const res = await pool.query(
+    `
+    SELECT inv.id, inv.qty, i.name, s.sell_price, s.currency
+    FROM inventory inv
+    JOIN items i ON i.key = inv.item_key
+    LEFT JOIN shop_items s ON s.item_key = inv.item_key AND s.sell_price IS NOT NULL
+    WHERE inv.id = $1 AND inv.player_id = $2 AND inv.equipped = FALSE
+    `,
+    [invId, player.id]
+  );
+  if (!res.rows.length) {
+    await ctx.reply("❌ Item não encontrado ou não vendável.");
+    if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
+    return;
+  }
+  const item = res.rows[0];
   if (qty > item.qty) {
-    return ctx.reply(`❌ Você só tem ${item.qty}x deste item.`);
+    await ctx.reply(`❌ Você só tem ${item.qty} desse item.`);
+    if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
+    return;
   }
-  
-  const totalGold = item.sell_price * qty;
-  
-  // Remove item ou decrementa qty
-  if (qty >= item.qty) {
-    await pool.query('DELETE FROM inventory WHERE id = $1', [item.id]);
-  } else {
-    await pool.query('UPDATE inventory SET qty = qty - $1 WHERE id = $2', [qty, item.id]);
-  }
-  
-  // Adiciona gold
-  await pool.query('UPDATE players SET gold = gold + $1 WHERE id = $2', [totalGold, player.id]);
-  
-  // Atualiza contador de slots
-  await pool.query(`
+
+  const total = item.sell_price * qty;
+  const info = currencyLabel(item.currency || "gold");
+  await pool.query(
+    qty >= item.qty ? "DELETE FROM inventory WHERE id = $1" : "UPDATE inventory SET qty = qty - $1 WHERE id = $2",
+    qty >= item.qty ? [invId] : [qty, invId]
+  );
+  await pool.query(`UPDATE players SET ${info.field} = ${info.field} + $1 WHERE id = $2`, [total, player.id]);
+  await pool.query(
+    `
     UPDATE players
     SET inventory_slots_used = (
       SELECT COUNT(*)
@@ -2652,14 +2690,15 @@ bot.command("vender_confirmar", async (ctx) => {
       WHERE player_id = $1 AND equipped = FALSE
     )
     WHERE id = $1
-  `, [player.id]);
-  
-  await ctx.reply(
-    `✅ **Venda realizada!**\n\n` +
-    `📦 ${item.name} x${qty}\n` +
-    `💰 +${totalGold} Gold`,
-    { parse_mode: 'Markdown' }
+  `,
+    [player.id]
   );
+
+  await ctx.reply(`✅ Venda concluída!\n${escapeHtml(item.name)} x${qty}\n+${formatPrice(total, info.field)}`, {
+    parse_mode: "HTML",
+    reply_markup: Markup.inlineKeyboard([[Markup.button.callback("⬅️ Loja", "loja_menu")]]).reply_markup,
+  });
+  if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
 });
 
 bot.action("vip", async (ctx) => {
