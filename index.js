@@ -98,6 +98,7 @@ const SHOP_IMAGES = {
   vila: process.env.SHOP_IMG_VILA,
   matadores: process.env.SHOP_IMG_MATADORES,
   castelo: process.env.SHOP_IMG_CASTELO,
+  main: process.env.SHOP_IMG_MAIN,
 };
 
 function makeGreenBar(current, max, size = 10) {
@@ -463,6 +464,10 @@ async function renderShopHome(ctx, player) {
     [Markup.button.callback("🏠 Menu", "menu")],
   ];
   const text = `<b>🏪 Lojas</b>\n\nEscolha uma loja:\n${shopBalanceHtml(player)}`;
+  const fileId = SHOP_IMAGES.main;
+  if (fileId) {
+    return sendCard(ctx, { fileId, caption: text, keyboard, parse_mode: "HTML" });
+  }
   return ctx.reply(text, { parse_mode: "HTML", reply_markup: Markup.inlineKeyboard(keyboard).reply_markup });
 }
 
@@ -768,8 +773,8 @@ bot.command("setshopimg", async (ctx) => {
   if (!isAdmin(ctx.from.id)) return ctx.reply("🚫 Apenas admin.");
   const [, keyRaw] = ctx.message.text.split(" ");
   const key = (keyRaw || "").toLowerCase();
-  if (!["vila", "matadores", "castelo"].includes(key)) {
-    return ctx.reply("Use /setshopimg <vila|matadores|castelo>");
+  if (!["vila", "matadores", "castelo", "main"].includes(key)) {
+    return ctx.reply("Use /setshopimg <vila|matadores|castelo|main>");
   }
   pendingUploads.set(ctx.chat.id, { type: "shop", key });
   ctx.reply(`Envie a imagem da loja *${key}* agora.`, { parse_mode: "Markdown" });
