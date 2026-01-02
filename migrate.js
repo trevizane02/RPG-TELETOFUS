@@ -18,6 +18,11 @@ const MOB_SEEDS = [
   { key: "bandit", name: "Bandido", map_key: "plains", rarity: "common", level_min: 2, hp: 60, atk: 8, def: 2, xp_gain: 20, gold_gain: 15 },
   { key: "troll", name: "Troll Jovem", map_key: "plains", rarity: "uncommon", level_min: 3, hp: 80, atk: 10, def: 3, xp_gain: 30, gold_gain: 20 },
   { key: "minotaur_scout", name: "Minotauro Batedor", map_key: "plains", rarity: "rare", level_min: 5, hp: 100, atk: 12, def: 4, xp_gain: 50, gold_gain: 35 },
+  // Dungeon Plains
+  { key: "d_wolf_alpha", name: "Lobo Alfa da Masmorra", map_key: "plains", rarity: "uncommon", level_min: 5, hp: 140, atk: 16, def: 6, xp_gain: 80, gold_gain: 60 },
+  { key: "d_spider_rock", name: "Aranha Rochedo", map_key: "plains", rarity: "uncommon", level_min: 6, hp: 160, atk: 18, def: 7, xp_gain: 95, gold_gain: 70 },
+  { key: "d_goblin_scout", name: "Goblin Batedor", map_key: "plains", rarity: "rare", level_min: 6, hp: 170, atk: 20, def: 7, xp_gain: 110, gold_gain: 80 },
+  { key: "d_rock_lord", name: "Senhor dos Rochedos", map_key: "plains", rarity: "boss_dungeon", level_min: 7, hp: 220, atk: 24, def: 9, xp_gain: 180, gold_gain: 120 },
 
   // Forest
   { key: "goblin", name: "Goblin", map_key: "forest", rarity: "common", level_min: 8, hp: 90, atk: 12, def: 3, xp_gain: 35, gold_gain: 25 },
@@ -26,6 +31,11 @@ const MOB_SEEDS = [
   { key: "elf_rogue", name: "Elfo Saqueador", map_key: "forest", rarity: "uncommon", level_min: 12, hp: 140, atk: 22, def: 5, xp_gain: 60, gold_gain: 45 },
   { key: "bear", name: "Urso", map_key: "forest", rarity: "uncommon", level_min: 13, hp: 170, atk: 24, def: 6, xp_gain: 70, gold_gain: 50 },
   { key: "ent", name: "Guardião da Mata", map_key: "forest", rarity: "boss", level_min: 15, hp: 260, atk: 30, def: 10, xp_gain: 130, gold_gain: 90 },
+  // Dungeon Forest
+  { key: "d_entling", name: "Ent Jovem (Masmorra)", map_key: "forest", rarity: "uncommon", level_min: 12, hp: 220, atk: 28, def: 8, xp_gain: 90, gold_gain: 70 },
+  { key: "d_forest_spider", name: "Aranha da Mata", map_key: "forest", rarity: "uncommon", level_min: 13, hp: 230, atk: 30, def: 8, xp_gain: 105, gold_gain: 80 },
+  { key: "d_elf_scout", name: "Batedor Elfo", map_key: "forest", rarity: "rare", level_min: 14, hp: 250, atk: 32, def: 9, xp_gain: 125, gold_gain: 95 },
+  { key: "d_forest_guardian", name: "Guardião do Bosque", map_key: "forest", rarity: "boss_dungeon", level_min: 15, hp: 320, atk: 38, def: 12, xp_gain: 190, gold_gain: 140 },
 
   // Swamp
   { key: "slime", name: "Slime Viscoso", map_key: "swamp", rarity: "common", level_min: 15, hp: 160, atk: 22, def: 5, xp_gain: 70, gold_gain: 60 },
@@ -34,6 +44,11 @@ const MOB_SEEDS = [
   { key: "witch", name: "Bruxa do Brejo", map_key: "swamp", rarity: "uncommon", level_min: 19, hp: 210, atk: 32, def: 8, xp_gain: 110, gold_gain: 80 },
   { key: "ghoul", name: "Ghoul", map_key: "swamp", rarity: "uncommon", level_min: 20, hp: 230, atk: 30, def: 7, xp_gain: 120, gold_gain: 85 },
   { key: "hydra_whelp", name: "Filhote de Hidra", map_key: "swamp", rarity: "boss", level_min: 22, hp: 320, atk: 38, def: 10, xp_gain: 200, gold_gain: 150 },
+  // Dungeon Swamp
+  { key: "d_swamp_orc", name: "Orc do Pântano (Masmorra)", map_key: "swamp", rarity: "uncommon", level_min: 17, hp: 260, atk: 34, def: 9, xp_gain: 130, gold_gain: 100 },
+  { key: "d_swamp_witch", name: "Bruxa do Brejo Sombria", map_key: "swamp", rarity: "rare", level_min: 19, hp: 280, atk: 38, def: 10, xp_gain: 150, gold_gain: 120 },
+  { key: "d_swamp_leech", name: "Sanguessuga Gigante", map_key: "swamp", rarity: "rare", level_min: 20, hp: 300, atk: 36, def: 11, xp_gain: 165, gold_gain: 135 },
+  { key: "d_swamp_hydra", name: "Hidra Menor", map_key: "swamp", rarity: "boss_dungeon", level_min: 22, hp: 380, atk: 44, def: 14, xp_gain: 240, gold_gain: 180 },
 
   // Grave
   { key: "skeleton", name: "Esqueleto", map_key: "grave", rarity: "common", level_min: 22, hp: 200, atk: 28, def: 7, xp_gain: 110, gold_gain: 90 },
