@@ -39,6 +39,12 @@ export function registerDungeon(bot, deps) {
     return crypto.randomBytes(3).toString("hex").toUpperCase();
   }
 
+  async function getDungeonImage(def) {
+    if (!def?.imageKey) return null;
+    const res = await pool.query("SELECT file_id FROM event_images WHERE event_key = $1", [def.imageKey]);
+    return res.rows[0]?.file_id || null;
+  }
+
   async function pickMobForDungeon(mapKey, preferBoss = false) {
     const res = await pool.query("SELECT * FROM mobs WHERE map_key = $1 AND key LIKE 'd_%'", [mapKey]);
     if (!res.rows.length) return null;
@@ -77,7 +83,8 @@ export function registerDungeon(bot, deps) {
       await ctx.reply("Não há masmorra neste mapa.");
       return null;
     }
-    return { player, map, def, dungeonKey };
+    const cover = await getDungeonImage(def);
+    return { player, map, def, dungeonKey, cover };
   }
 
   function renderLobby(session) {
@@ -178,7 +185,7 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
     }
     const bossMob = await pickMobForDungeon(session.mapKey, true) || session.rooms[session.rooms.length - 1];
     session.boss = scaleMob(bossMob, session.members.size, true);
-    session.mapImage = session.def.imageKey ? (await pool.query("SELECT file_id FROM event_images WHERE event_key = $1", [session.def.imageKey])).rows[0]?.file_id : null;
+    session.mapImage = await getDungeonImage(session.def);
     session.state = 'running';
     session.roomIndex = 0;
     session.actions.clear();
@@ -345,16 +352,17 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
   bot.command('dungeon', async (ctx) => {
     const base = await ensureSession(ctx);
     if (!base) return;
-    await ctx.reply(
-      `🗝️ ${base.def.name}\nMapa: ${base.map.name}\n\nCrie uma sala para seu grupo ou entre com o código de um amigo.`,
-      {
-        reply_markup: Markup.inlineKeyboard([
-          [Markup.button.callback('➕ Criar sala', 'd_menu_create')],
-          [Markup.button.callback('🔑 Entrar com código', 'd_menu_join')],
-          [Markup.button.callback('🏠 Menu', 'menu')],
-        ]).reply_markup,
-      }
-    );
+    const text = `🗝️ ${base.def.name}\nMapa: ${base.map.name}\n\nCrie uma sala para seu grupo ou entre com o código de um amigo.`;
+    const keyboard = Markup.inlineKeyboard([
+      [Markup.button.callback('➕ Criar sala', 'd_menu_create')],
+      [Markup.button.callback('🔑 Entrar com código', 'd_menu_join')],
+      [Markup.button.callback('🏠 Menu', 'menu')],
+    ]).reply_markup;
+    if (base.cover) {
+      await bot.telegram.sendPhoto(ctx.chat.id, base.cover, { caption: text, reply_markup: keyboard, parse_mode: 'Markdown' });
+    } else {
+      await ctx.reply(text, { reply_markup: keyboard });
+    }
   });
 
   bot.action('dungeon_menu', async (ctx) => {
@@ -363,16 +371,17 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
       if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
       return;
     }
-    await ctx.reply(
-      `🗝️ ${base.def.name}\nMapa: ${base.map.name}\n\nCrie uma sala ou entre em uma existente.`,
-      {
-        reply_markup: Markup.inlineKeyboard([
-          [Markup.button.callback('➕ Criar sala', 'd_menu_create')],
-          [Markup.button.callback('🔑 Entrar com código', 'd_menu_join')],
-          [Markup.button.callback('🏠 Menu', 'menu')],
-        ]).reply_markup,
-      }
-    );
+    const text = `🗝️ ${base.def.name}\nMapa: ${base.map.name}\n\nCrie uma sala ou entre em uma existente.`;
+    const keyboard = Markup.inlineKeyboard([
+      [Markup.button.callback('➕ Criar sala', 'd_menu_create')],
+      [Markup.button.callback('🔑 Entrar com código', 'd_menu_join')],
+      [Markup.button.callback('🏠 Menu', 'menu')],
+    ]).reply_markup;
+    if (base.cover) {
+      await bot.telegram.sendPhoto(ctx.chat.id, base.cover, { caption: text, reply_markup: keyboard, parse_mode: 'Markdown' });
+    } else {
+      await ctx.reply(text, { reply_markup: keyboard });
+    }
     if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
   });
 
