@@ -139,7 +139,7 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
       actions: new Map(),
       log: [],
     };
-    session.memberData.set(String(ctx.from.id), { name: base.player.name || 'Aventureiro', ready: true, hp: base.player.hp, maxHp: stats.total_hp, alive: true });
+    session.memberData.set(String(ctx.from.id), { name: base.player.name || 'Aventureiro', ready: true, hp: base.player.hp, maxHp: stats.total_hp, alive: true, dmg: 0 });
     sessions.set(code, session);
     await ctx.reply(`Dungeon criada: código ${code}. Compartilhe com o grupo.`);
     await sendLobby(session);
@@ -159,7 +159,7 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
     const player = await getPlayer(userId, ctx.from.first_name);
     const stats = await getPlayerStats(player);
     session.members.add(userId);
-    session.memberData.set(userId, { name: player.name || 'Aventureiro', ready: true, hp: player.hp, maxHp: stats.total_hp, alive: true });
+    session.memberData.set(userId, { name: player.name || 'Aventureiro', ready: true, hp: player.hp, maxHp: stats.total_hp, alive: true, dmg: 0 });
     await ctx.reply(`Você entrou na dungeon ${session.name}.`);
     await sendLobby(session);
   }
@@ -207,14 +207,14 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
   function roomCaption(session, room, isBoss) {
     const lines = [
       `${isBoss ? '👑 Boss' : '👹 Mob'}: ${room.name}`,
-      `❤️ ${room.hp}/${room.hpMax} ${makeBar(room.hp, room.hpMax, 8)}`,
+      `HP ${room.hp}/${room.hpMax} ${makeBar(room.hp, room.hpMax, 10)}`,
       `Sala ${isBoss ? 'Boss' : session.roomIndex + 1}/${session.def.rooms}`,
       '👥 Membros:',
       ...[...session.members].map((uid) => {
         const m = session.memberData.get(uid);
         if (!m) return uid;
         if (!m.alive) return `${m.name} (💀)`;
-        return `${m.name} ❤️ ${m.hp}/${m.maxHp || m.hp}`;
+        return `${m.name} ${makeBar(m.hp, m.maxHp || m.hp, 8)} ${m.hp}/${m.maxHp || m.hp} | Dano: ${m.dmg || 0}`;
       }),
     ];
     return lines.join('\n');
@@ -270,6 +270,9 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
       if (action.type === 'attack') {
         const dmg = rollDamage(stats.total_atk, room.def, Math.random() * 100 < stats.total_crit);
         totalDmg += dmg;
+        const md = session.memberData.get(uid);
+        md.dmg = (md.dmg || 0) + dmg;
+        session.memberData.set(uid, md);
       } else if (action.type === 'defend') {
         defenders.push(uid);
       } else if (action.type === 'cons' && action.itemKey) {
@@ -326,6 +329,17 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
     const msgLines = [`🏆 Dungeon concluída!`, `Boss: ${boss.name}`];
     // XP final (boss index = rooms)
     await awardRoomXp(session, session.def.rooms);
+
+    // Ranking de dano
+    const ranking = [...session.memberData.entries()]
+      .map(([uid, m]) => ({ uid, name: m.name, dmg: m.dmg || 0 }))
+      .sort((a, b) => b.dmg - a.dmg);
+    if (ranking.length) {
+      msgLines.push('📊 Dano causado:');
+      ranking.forEach((r, idx) => {
+        msgLines.push(`${idx + 1}. ${r.name}: ${r.dmg}`);
+      });
+    }
 
     for (const uid of session.members) {
       const player = await getPlayer(uid);
