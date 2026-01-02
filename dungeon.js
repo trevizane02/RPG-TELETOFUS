@@ -22,10 +22,10 @@ export function registerDungeon(bot, deps) {
   const sessions = new Map(); // code -> session
 
   const DUNGEON_DEFS = {
-    plains: { name: 'Masmorra da Planície', rooms: 3, xp: [400, 500, 600, 900], key: 'dungeon_key', boneChance: 0.01 },
-    forest: { name: 'Masmorra da Floresta', rooms: 3, xp: [600, 800, 1000, 1400], key: 'dungeon_key', boneChance: 0.01 },
-    swamp: { name: 'Masmorra do Pântano', rooms: 3, xp: [900, 1100, 1300, 2200], key: 'dungeon_key', boneChance: 0.015 },
-    special: { name: 'Masmorra Especial', rooms: 3, xp: [1200, 1600, 2000, 3200], key: 'bone_key', boneChance: 0.1 },
+    plains: { name: 'Masmorra da Planície', rooms: 3, xp: [400, 500, 600, 900], key: 'dungeon_key', boneChance: 0.01, imageKey: 'dungeon_plains' },
+    forest: { name: 'Masmorra da Floresta', rooms: 3, xp: [600, 800, 1000, 1400], key: 'dungeon_key', boneChance: 0.01, imageKey: 'dungeon_forest' },
+    swamp: { name: 'Masmorra do Pântano', rooms: 3, xp: [900, 1100, 1300, 2200], key: 'dungeon_key', boneChance: 0.015, imageKey: 'dungeon_swamp' },
+    special: { name: 'Masmorra Especial', rooms: 3, xp: [1200, 1600, 2000, 3200], key: 'bone_key', boneChance: 0.1, imageKey: 'dungeon_special' },
   };
 
   function mapToDungeonKey(mapKey) {
@@ -40,7 +40,7 @@ export function registerDungeon(bot, deps) {
   }
 
   async function pickMobForDungeon(mapKey, preferBoss = false) {
-    const res = await pool.query('SELECT * FROM mobs WHERE map_key = $1', [mapKey]);
+    const res = await pool.query("SELECT * FROM mobs WHERE map_key = $1 AND key LIKE 'd_%'", [mapKey]);
     if (!res.rows.length) return null;
     const bosses = res.rows.filter((m) => (m.rarity || '').includes('boss'));
     if (preferBoss && bosses.length) return bosses[Math.floor(Math.random() * bosses.length)];
@@ -178,6 +178,7 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
     }
     const bossMob = await pickMobForDungeon(session.mapKey, true) || session.rooms[session.rooms.length - 1];
     session.boss = scaleMob(bossMob, session.members.size, true);
+    session.mapImage = session.def.imageKey ? (await pool.query("SELECT file_id FROM event_images WHERE event_key = $1", [session.def.imageKey])).rows[0]?.file_id : null;
     session.state = 'running';
     session.roomIndex = 0;
     session.actions.clear();
@@ -216,8 +217,19 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
     const isBoss = session.roomIndex >= session.def.rooms;
     const room = isBoss ? session.boss : session.rooms[session.roomIndex];
     if (!room) return;
+    const caption = roomCaption(session, room, isBoss);
+    const keyboard = combatKeyboard(session.code);
     for (const uid of session.members) {
-      await bot.telegram.sendMessage(uid, roomCaption(session, room, isBoss), { reply_markup: combatKeyboard(session.code) }).catch(() => {});
+      const fileId = session.mapImage || room.image;
+      try {
+        if (fileId) {
+          await bot.telegram.sendPhoto(uid, fileId, { caption, reply_markup: keyboard, parse_mode: 'Markdown' });
+        } else {
+          await bot.telegram.sendMessage(uid, caption, { reply_markup: keyboard, parse_mode: 'Markdown' });
+        }
+      } catch (e) {
+        await bot.telegram.sendMessage(uid, caption, { reply_markup: keyboard, parse_mode: 'Markdown' }).catch(() => {});
+      }
     }
   }
 
