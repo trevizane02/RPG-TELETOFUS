@@ -87,6 +87,14 @@ export function registerDungeon(bot, deps) {
     return { player, map, def, dungeonKey, cover };
   }
 
+  function dungeonMenuKeyboard() {
+    return Markup.inlineKeyboard([
+      [Markup.button.callback('➕ Criar sala', 'd_menu_create')],
+      [Markup.button.callback('🔍 Buscar salas', 'd_menu_browse')],
+      [Markup.button.callback('🏠 Menu', 'menu')],
+    ]).reply_markup;
+  }
+
   function renderLobby(session) {
     const lines = [];
     for (const uid of session.members) {
