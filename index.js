@@ -785,8 +785,8 @@ bot.command("seteventimg", async (ctx) => {
   if (!isAdmin(ctx.from.id)) return ctx.reply("🚫 Apenas admin.");
   const [, keyRaw] = ctx.message.text.split(" ");
   const key = (keyRaw || "").toLowerCase();
-  if (!["chest", "trap", "merchant", "loot_gold", "loot_item"].includes(key)) {
-    return ctx.reply("Use /seteventimg <chest|trap|merchant|loot_gold|loot_item>");
+  if (!["chest", "trap", "merchant", "loot_gold", "loot_item", "dungeon_plains", "dungeon_forest", "dungeon_swamp", "dungeon_special"].includes(key)) {
+    return ctx.reply("Use /seteventimg <chest|trap|merchant|loot_gold|loot_item|dungeon_plains|dungeon_forest|dungeon_swamp|dungeon_special>");
   }
   pendingUploads.set(ctx.chat.id, { type: "event", key });
   ctx.reply(`Envie a imagem do evento *${key}* agora.`, { parse_mode: "Markdown" });

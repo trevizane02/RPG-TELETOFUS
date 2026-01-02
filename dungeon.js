@@ -1,5 +1,5 @@
-import { Markup } from 'telegraf';
-import crypto from 'crypto';
+import { Markup } from "telegraf";
+import crypto from "crypto";
 
 export function registerDungeon(bot, deps) {
   const {
@@ -22,21 +22,21 @@ export function registerDungeon(bot, deps) {
   const sessions = new Map(); // code -> session
 
   const DUNGEON_DEFS = {
-    plains: { name: 'Masmorra da Planície', rooms: 3, xp: [400, 500, 600, 900], key: 'dungeon_key', boneChance: 0.01, imageKey: 'dungeon_plains' },
-    forest: { name: 'Masmorra da Floresta', rooms: 3, xp: [600, 800, 1000, 1400], key: 'dungeon_key', boneChance: 0.01, imageKey: 'dungeon_forest' },
-    swamp: { name: 'Masmorra do Pântano', rooms: 3, xp: [900, 1100, 1300, 2200], key: 'dungeon_key', boneChance: 0.015, imageKey: 'dungeon_swamp' },
-    special: { name: 'Masmorra Especial', rooms: 3, xp: [1200, 1600, 2000, 3200], key: 'bone_key', boneChance: 0.1, imageKey: 'dungeon_special' },
+    plains: { name: "Masmorra da Planície", rooms: 3, xp: [400, 500, 600, 900], key: "dungeon_key", boneChance: 0.01, imageKey: "dungeon_plains" },
+    forest: { name: "Masmorra da Floresta", rooms: 3, xp: [600, 800, 1000, 1400], key: "dungeon_key", boneChance: 0.01, imageKey: "dungeon_forest" },
+    swamp: { name: "Masmorra do Pântano", rooms: 3, xp: [900, 1100, 1300, 2200], key: "dungeon_key", boneChance: 0.015, imageKey: "dungeon_swamp" },
+    special: { name: "Masmorra Especial", rooms: 3, xp: [1200, 1600, 2000, 3200], key: "bone_key", boneChance: 0.1, imageKey: "dungeon_special" },
   };
 
   function mapToDungeonKey(mapKey) {
-    if (mapKey === 'plains') return 'plains';
-    if (mapKey === 'forest') return 'forest';
-    if (mapKey === 'swamp') return 'swamp';
-    return 'special';
+    if (mapKey === "plains") return "plains";
+    if (mapKey === "forest") return "forest";
+    if (mapKey === "swamp") return "swamp";
+    return "special";
   }
 
   function genCode() {
-    return crypto.randomBytes(3).toString('hex').toUpperCase();
+    return crypto.randomBytes(3).toString("hex").toUpperCase();
   }
 
   async function pickMobForDungeon(mapKey, preferBoss = false) {
@@ -74,7 +74,7 @@ export function registerDungeon(bot, deps) {
     const dungeonKey = mapToDungeonKey(map.key);
     const def = DUNGEON_DEFS[dungeonKey];
     if (!def) {
-      await ctx.reply('Não há masmorra neste mapa.');
+      await ctx.reply("Não há masmorra neste mapa.");
       return null;
     }
     return { player, map, def, dungeonKey };
@@ -223,12 +223,12 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
       const fileId = session.mapImage || room.image;
       try {
         if (fileId) {
-          await bot.telegram.sendPhoto(uid, fileId, { caption, reply_markup: keyboard, parse_mode: 'Markdown' });
+          await bot.telegram.sendPhoto(uid, fileId, { caption, reply_markup: keyboard, parse_mode: "Markdown" });
         } else {
-          await bot.telegram.sendMessage(uid, caption, { reply_markup: keyboard, parse_mode: 'Markdown' });
+          await bot.telegram.sendMessage(uid, caption, { reply_markup: keyboard, parse_mode: "Markdown" });
         }
       } catch (e) {
-        await bot.telegram.sendMessage(uid, caption, { reply_markup: keyboard, parse_mode: 'Markdown' }).catch(() => {});
+        await bot.telegram.sendMessage(uid, caption, { reply_markup: keyboard, parse_mode: "Markdown" }).catch(() => {});
       }
     }
   }
@@ -345,17 +345,55 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
   bot.command('dungeon', async (ctx) => {
     const base = await ensureSession(ctx);
     if (!base) return;
-    await ctx.reply(`🗝️ ${base.def.name}\nMapa: ${base.map.name}\nUse /dungeon_create para abrir uma sala ou /dungeon_join <código>.`);
+    await ctx.reply(
+      `🗝️ ${base.def.name}\nMapa: ${base.map.name}\n\nCrie uma sala para seu grupo ou entre com o código de um amigo.`,
+      {
+        reply_markup: Markup.inlineKeyboard([
+          [Markup.button.callback('➕ Criar sala', 'd_menu_create')],
+          [Markup.button.callback('🔑 Entrar com código', 'd_menu_join')],
+          [Markup.button.callback('🏠 Menu', 'menu')],
+        ]).reply_markup,
+      }
+    );
+  });
+
+  bot.action('dungeon_menu', async (ctx) => {
+    const base = await ensureSession(ctx);
+    if (!base) {
+      if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
+      return;
+    }
+    await ctx.reply(
+      `🗝️ ${base.def.name}\nMapa: ${base.map.name}\n\nCrie uma sala ou entre em uma existente.`,
+      {
+        reply_markup: Markup.inlineKeyboard([
+          [Markup.button.callback('➕ Criar sala', 'd_menu_create')],
+          [Markup.button.callback('🔑 Entrar com código', 'd_menu_join')],
+          [Markup.button.callback('🏠 Menu', 'menu')],
+        ]).reply_markup,
+      }
+    );
+    if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
   });
 
   bot.command('dungeon_create', async (ctx) => {
     await createSession(ctx);
   });
 
+  bot.action('d_menu_create', async (ctx) => {
+    await createSession(ctx);
+    if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
+  });
+
   bot.command('dungeon_join', async (ctx) => {
     const [, code] = (ctx.message.text || '').split(' ');
     if (!code) return ctx.reply('Use /dungeon_join <código>');
     await joinSession(ctx, code.trim().toUpperCase());
+  });
+
+  bot.action('d_menu_join', async (ctx) => {
+    await ctx.reply('Digite: /dungeon_join <código>');
+    if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
   });
 
   bot.action(/^d_ready:(.+)$/, async (ctx) => {
