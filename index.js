@@ -3,6 +3,7 @@ import express from "express";
 import { Telegraf, Markup } from "telegraf";
 import { pool } from "./db.js";
 import { migrate } from "./migrate.js";
+import { registerDungeon } from "./dungeon.js";
 
 // --------------------------------------
 // Bootstrap HTTP (health) + migrations
@@ -2886,6 +2887,24 @@ bot.action(/^shop_sell_do:([A-Za-z0-9_-]+):(\d+)$/, async (ctx) => {
 bot.action("vip", async (ctx) => {
   await ctx.reply("💎 VIP em breve.", Markup.inlineKeyboard([[Markup.button.callback("🏠 Menu", "menu")]]));
   if (ctx.callbackQuery) ctx.answerCbQuery();
+});
+
+// Registra dungeons (co-op)
+registerDungeon(bot, {
+  pool,
+  getPlayer,
+  getPlayerStats,
+  setPlayerState,
+  maybeDropItem,
+  useConsumable,
+  sendCard,
+  getMapByKey,
+  makeBar,
+  rollDamage,
+  hasItemQty,
+  consumeItem,
+  awardItem,
+  STATES,
 });
 
 // Launch bot
