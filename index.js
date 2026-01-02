@@ -1534,7 +1534,7 @@ async function handleUseConsumable(ctx) {
     if (ctx.callbackQuery) ctx.answerCbQuery("Luta acabou.");
     return;
   }
-  const [, , key] = (ctx.match || []);
+  const key = ctx.match && ctx.match[1];
   if (!key) {
     if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
     return;
