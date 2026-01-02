@@ -1660,10 +1660,32 @@ bot.on("text", async (ctx, next) => {
       await ctx.reply("Nome inválido. Use entre 3 e 20 caracteres.");
       return;
     }
-    await pool.query("UPDATE players SET name = $1, state = $2 WHERE id = $3", [name, STATES.MENU, player.id]);
-    await ctx.reply(`Nome atualizado para: ${name}`, {
-      reply_markup: Markup.inlineKeyboard([[Markup.button.callback("🏠 Menu", "menu")]]).reply_markup,
-    });
+    const alreadyUsed = !!player.rename_free_used;
+    if (!alreadyUsed) {
+      await pool.query("UPDATE players SET name = $1, state = $2, rename_free_used = true WHERE id = $3", [
+        name,
+        STATES.MENU,
+        player.id,
+      ]);
+      await ctx.reply(`Nome atualizado para: ${name} (1ª troca grátis). Próximas custam 150 Tofus.`, {
+        reply_markup: Markup.inlineKeyboard([[Markup.button.callback("🏠 Menu", "menu")]]).reply_markup,
+      });
+    } else {
+      if ((player.tofus || 0) < 150) {
+        await ctx.reply(`Você precisa de 150 Tofus para renomear. Saldo atual: ${player.tofus || 0}.`, {
+          reply_markup: Markup.inlineKeyboard([[Markup.button.callback("🏠 Menu", "menu")]]).reply_markup,
+        });
+        return;
+      }
+      await pool.query("UPDATE players SET name = $1, state = $2, tofus = tofus - 150 WHERE id = $3", [
+        name,
+        STATES.MENU,
+        player.id,
+      ]);
+      await ctx.reply(`Nome atualizado para: ${name}. (-150 Tofus)`, {
+        reply_markup: Markup.inlineKeyboard([[Markup.button.callback("🏠 Menu", "menu")]]).reply_markup,
+      });
+    }
     return;
   }
   return next();

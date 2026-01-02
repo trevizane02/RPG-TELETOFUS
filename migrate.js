@@ -304,6 +304,9 @@ export async function migrate() {
           IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='players' AND column_name='inventory_slots_max') THEN
             ALTER TABLE players ADD COLUMN inventory_slots_max INT NOT NULL DEFAULT 20;
           END IF;
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='players' AND column_name='rename_free_used') THEN
+            ALTER TABLE players ADD COLUMN rename_free_used BOOLEAN NOT NULL DEFAULT false;
+          END IF;
         END $$;
       `);
 
