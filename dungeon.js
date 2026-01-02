@@ -352,17 +352,7 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
   bot.command('dungeon', async (ctx) => {
     const base = await ensureSession(ctx);
     if (!base) return;
-    const text = `🗝️ ${base.def.name}\nMapa: ${base.map.name}\n\nCrie uma sala para seu grupo ou entre com o código de um amigo.`;
-    const keyboard = Markup.inlineKeyboard([
-      [Markup.button.callback('➕ Criar sala', 'd_menu_create')],
-      [Markup.button.callback('🔑 Entrar com código', 'd_menu_join')],
-      [Markup.button.callback('🏠 Menu', 'menu')],
-    ]).reply_markup;
-    if (base.cover) {
-      await bot.telegram.sendPhoto(ctx.chat.id, base.cover, { caption: text, reply_markup: keyboard, parse_mode: 'Markdown' });
-    } else {
-      await ctx.reply(text, { reply_markup: keyboard });
-    }
+    await showDungeonMenu(ctx, base);
   });
 
   bot.action('dungeon_menu', async (ctx) => {
@@ -371,17 +361,7 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
       if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
       return;
     }
-    const text = `🗝️ ${base.def.name}\nMapa: ${base.map.name}\n\nCrie uma sala ou entre em uma existente.`;
-    const keyboard = Markup.inlineKeyboard([
-      [Markup.button.callback('➕ Criar sala', 'd_menu_create')],
-      [Markup.button.callback('🔑 Entrar com código', 'd_menu_join')],
-      [Markup.button.callback('🏠 Menu', 'menu')],
-    ]).reply_markup;
-    if (base.cover) {
-      await bot.telegram.sendPhoto(ctx.chat.id, base.cover, { caption: text, reply_markup: keyboard, parse_mode: 'Markdown' });
-    } else {
-      await ctx.reply(text, { reply_markup: keyboard });
-    }
+    await showDungeonMenu(ctx, base);
     if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
   });
 
@@ -394,6 +374,26 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
     if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
   });
 
+  bot.action('d_menu_browse', async (ctx) => {
+    const base = await ensureSession(ctx);
+    if (!base) {
+      if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
+      return;
+    }
+    const available = [...sessions.values()].filter((s) => s.state === 'lobby' && s.mapKey === base.map.key);
+    if (!available.length) {
+      await ctx.reply('Nenhuma sala disponível neste mapa. Crie uma sala ou tente mais tarde.', { reply_markup: dungeonMenuKeyboard() });
+      if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
+      return;
+    }
+    const buttons = available.map((s) => [
+      Markup.button.callback(`${s.name} | ${s.members.size}/5 | ${s.code}`, `d_join:${s.code}`),
+    ]);
+    buttons.push([Markup.button.callback('⬅️ Voltar', 'dungeon_menu')]);
+    await ctx.reply('Salas disponíveis:', { reply_markup: Markup.inlineKeyboard(buttons).reply_markup });
+    if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
+  });
+
   bot.command('dungeon_join', async (ctx) => {
     const [, code] = (ctx.message.text || '').split(' ');
     if (!code) return ctx.reply('Use /dungeon_join <código>');
@@ -402,6 +402,12 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
 
   bot.action('d_menu_join', async (ctx) => {
     await ctx.reply('Digite: /dungeon_join <código>');
+    if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
+  });
+
+  bot.action(/^d_join:(.+)$/, async (ctx) => {
+    const code = ctx.match[1];
+    await joinSession(ctx, code);
     if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
   });
 
