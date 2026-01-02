@@ -123,6 +123,7 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
     const base = await ensureSession(ctx);
     if (!base) return;
     const code = genCode();
+    const stats = await getPlayerStats(base.player);
     const session = {
       code,
       name: base.def.name,
@@ -138,7 +139,7 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
       actions: new Map(),
       log: [],
     };
-    session.memberData.set(String(ctx.from.id), { name: base.player.name || 'Aventureiro', ready: true, hp: base.player.hp, alive: true });
+    session.memberData.set(String(ctx.from.id), { name: base.player.name || 'Aventureiro', ready: true, hp: base.player.hp, maxHp: stats.total_hp, alive: true });
     sessions.set(code, session);
     await ctx.reply(`Dungeon criada: código ${code}. Compartilhe com o grupo.`);
     await sendLobby(session);
@@ -156,8 +157,9 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
     }
     const userId = String(ctx.from.id);
     const player = await getPlayer(userId, ctx.from.first_name);
+    const stats = await getPlayerStats(player);
     session.members.add(userId);
-    session.memberData.set(userId, { name: player.name || 'Aventureiro', ready: true, hp: player.hp, alive: true });
+    session.memberData.set(userId, { name: player.name || 'Aventureiro', ready: true, hp: player.hp, maxHp: stats.total_hp, alive: true });
     await ctx.reply(`Você entrou na dungeon ${session.name}.`);
     await sendLobby(session);
   }
@@ -169,20 +171,14 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
     if (session.state !== 'lobby') return ctx.answerCbQuery('Já iniciada').catch(() => {});
     if (session.members.size === 0) return ctx.answerCbQuery('Sem membros').catch(() => {});
 
-    // Verifica chave em todos
-    for (const uid of session.members) {
-      const p = await getPlayer(uid);
-      const ok = await hasItemQty(p.id, session.def.key, 1);
-      if (!ok) {
-        await ctx.reply(`Jogador ${session.memberData.get(uid)?.name || uid} não tem ${session.def.key}.`);
-        return;
-      }
+    // Apenas o líder precisa da chave
+    const leader = await getPlayer(session.ownerId);
+    const leaderHasKey = await hasItemQty(leader.id, session.def.key, 1);
+    if (!leaderHasKey) {
+      await ctx.reply(`O líder precisa de 1 ${session.def.key} para iniciar.`);
+      return;
     }
-    // Consome chave
-    for (const uid of session.members) {
-      const p = await getPlayer(uid);
-      await consumeItem(p.id, session.def.key, 1);
-    }
+    await consumeItem(leader.id, session.def.key, 1);
 
     // Monta salas
     session.rooms = [];
@@ -213,10 +209,13 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
       `${isBoss ? '👑 Boss' : '👹 Mob'}: ${room.name}`,
       `❤️ ${room.hp}/${room.hpMax} ${makeBar(room.hp, room.hpMax, 8)}`,
       `Sala ${isBoss ? 'Boss' : session.roomIndex + 1}/${session.def.rooms}`,
-      `Membros: ${[...session.members].map((uid) => {
+      '👥 Membros:',
+      ...[...session.members].map((uid) => {
         const m = session.memberData.get(uid);
-        return `${m.name}${!m.alive ? ' (💀)' : ''}`;
-      }).join(', ')}`,
+        if (!m) return uid;
+        if (!m.alive) return `${m.name} (💀)`;
+        return `${m.name} ❤️ ${m.hp}/${m.maxHp || m.hp}`;
+      }),
     ];
     return lines.join('\n');
   }
@@ -235,7 +234,7 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
     const caption = roomCaption(session, room, isBoss);
     const keyboard = combatKeyboard(session.code);
     for (const uid of session.members) {
-      const fileId = session.mapImage || room.image;
+      const fileId = room.image || session.mapImage;
       try {
         if (fileId) {
           await bot.telegram.sendPhoto(uid, fileId, { caption, reply_markup: keyboard, parse_mode: "Markdown" });
