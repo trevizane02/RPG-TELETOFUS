@@ -1630,14 +1630,6 @@ bot.action("arena_queue", async (ctx) => {
   await tryMatchArena();
 });
 
-bot.action("dungeon_menu", async (ctx) => {
-  await ctx.reply(
-    "🗝️ Masmorra co-op\nUse /dungeon_create <dif 1-5> [senha] (consome 1 dungeon_key)\nAmigos entram com /dungeon_join <codigo> [senha]\nMáx 3 jogadores.",
-    Markup.inlineKeyboard([[Markup.button.callback("🏠 Menu", "menu")]])
-  );
-  if (ctx.callbackQuery) ctx.answerCbQuery();
-});
-
 async function renderOnlineStats(ctx) {
   const maps = await getMapList();
   const mapName = new Map(maps.map((m) => [m.key, m.name]));
