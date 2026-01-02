@@ -349,6 +349,16 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
   }
 
   // Handlers
+  async function showDungeonMenu(ctx, base) {
+    const text = `🗝️ ${base.def.name}\nMapa: ${base.map.name}\n\nCrie uma sala para seu grupo ou entre com o código de um amigo.`;
+    const keyboard = dungeonMenuKeyboard();
+    if (base.cover) {
+      await bot.telegram.sendPhoto(ctx.chat.id, base.cover, { caption: text, reply_markup: keyboard, parse_mode: 'Markdown' });
+    } else {
+      await ctx.reply(text, { reply_markup: keyboard });
+    }
+  }
+
   bot.command('dungeon', async (ctx) => {
     const base = await ensureSession(ctx);
     if (!base) return;

@@ -1298,9 +1298,9 @@ async function startMerchant(ctx, player, map) {
 }
 
 async function pickMob(mapKey, playerLevel, forceRare = false) {
-  let res = await pool.query("SELECT * FROM mobs WHERE map_key = $1 AND level_min <= $2", [mapKey, playerLevel]);
-  if (res.rows.length === 0) res = await pool.query("SELECT * FROM mobs WHERE map_key = $1 ORDER BY level_min ASC", [mapKey]);
-  if (res.rows.length === 0) res = await pool.query("SELECT * FROM mobs LIMIT 1");
+  let res = await pool.query("SELECT * FROM mobs WHERE map_key = $1 AND key NOT LIKE 'd_%' AND level_min <= $2", [mapKey, playerLevel]);
+  if (res.rows.length === 0) res = await pool.query("SELECT * FROM mobs WHERE map_key = $1 AND key NOT LIKE 'd_%' ORDER BY level_min ASC", [mapKey]);
+  if (res.rows.length === 0) res = await pool.query("SELECT * FROM mobs WHERE key NOT LIKE 'd_%' LIMIT 1");
 
   const weights = { common: 1, uncommon: 0.6, rare: 0.3, boss: 0.1 };
   const candidates = res.rows.map((mob) => {
