@@ -108,6 +108,16 @@ const ITEM_SEEDS = [
   { key: "steel_shield", name: "Escudo de Aço", slot: "shield", rarity: "uncommon", def_min: 2, def_max: 5, hp_min: 0, hp_max: 5, drop_rate: 0.02, map_key: "forest" },
   { key: "tower_shield", name: "Escudo Torre", slot: "shield", rarity: "rare", def_min: 4, def_max: 8, hp_min: 0, hp_max: 8, drop_rate: 0.008, map_key: "mountain" },
 
+  // Acessórios (Plains)
+  { key: "brass_ring", name: "Anel de Latão", slot: "ring", rarity: "uncommon", atk_min: 1, atk_max: 4, crit_min: 1, crit_max: 2, drop_rate: 0.01, map_key: "plains" },
+  { key: "sapphire_amulet", name: "Colar de Safira", slot: "amulet", rarity: "uncommon", def_min: 1, def_max: 2, hp_min: 1, hp_max: 5, drop_rate: 0.01, map_key: "plains" },
+  { key: "leather_boots", name: "Bota de Couro", slot: "boots", rarity: "uncommon", def_min: 2, def_max: 5, hp_min: 1, hp_max: 3, drop_rate: 0.01, map_key: "plains" },
+
+  // Acessórios (Forest)
+  { key: "silver_ring", name: "Anel de Prata", slot: "ring", rarity: "uncommon", atk_min: 2, atk_max: 7, crit_min: 2, crit_max: 4, drop_rate: 0.01, map_key: "forest" },
+  { key: "platinum_amulet", name: "Colar de Platina", slot: "amulet", rarity: "uncommon", def_min: 1, def_max: 5, hp_min: 2, hp_max: 7, drop_rate: 0.01, map_key: "forest" },
+  { key: "iron_boots", name: "Bota de Ferro", slot: "boots", rarity: "uncommon", def_min: 5, def_max: 8, hp_min: 1, hp_max: 4, drop_rate: 0.01, map_key: "forest" },
+
   // Accessories
   { key: "amulet_health", name: "Amuleto Vital", slot: "amulet", rarity: "rare", hp_min: 15, hp_max: 30, drop_rate: 0.008, map_key: "desert" },
   { key: "ring_protect", name: "Anel de Proteção", slot: "ring", rarity: "rare", def_min: 2, def_max: 5, drop_rate: 0.008, map_key: "grave" },

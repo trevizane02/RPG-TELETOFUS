@@ -474,6 +474,7 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
     session.members.delete(uid);
     session.memberData.delete(uid);
     await ctx.answerCbQuery('Saiu').catch(() => {});
+    await bot.telegram.sendMessage(uid, 'Você saiu da masmorra.', { reply_markup: Markup.inlineKeyboard([[Markup.button.callback('🏠 Menu', 'menu')]]).reply_markup }).catch(() => {});
     if (session.members.size === 0) {
       sessions.delete(code);
     } else {

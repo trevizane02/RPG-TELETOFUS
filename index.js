@@ -354,16 +354,24 @@ function rollItemStats(item) {
 
 async function consumeItem(playerId, itemKey, qty = 1) {
   const res = await pool.query(
-    "SELECT qty FROM inventory WHERE player_id = $1 AND item_key = $2",
+    "SELECT id, qty FROM inventory WHERE player_id = $1 AND item_key = $2 ORDER BY qty DESC",
     [playerId, itemKey]
   );
-  if (res.rows.length === 0 || res.rows[0].qty < qty) return false;
-  await pool.query(
-    "UPDATE inventory SET qty = qty - $1 WHERE player_id = $2 AND item_key = $3",
-    [qty, playerId, itemKey]
-  );
-  await pool.query("DELETE FROM inventory WHERE qty <= 0");
-  return true;
+  if (res.rows.length === 0) return false;
+  const total = res.rows.reduce((acc, r) => acc + Number(r.qty || 0), 0);
+  if (total < qty) return false;
+  let remaining = qty;
+  for (const row of res.rows) {
+    if (remaining <= 0) break;
+    if (row.qty > remaining) {
+      await pool.query("UPDATE inventory SET qty = qty - $1 WHERE id = $2", [remaining, row.id]);
+      remaining = 0;
+    } else {
+      remaining -= row.qty;
+      await pool.query("DELETE FROM inventory WHERE id = $1", [row.id]);
+    }
+  }
+  return remaining === 0;
 }
 
 async function hasItemQty(playerId, itemKey, qty = 1) {
@@ -404,7 +412,7 @@ async function getShopItemsByKey(shopKey) {
   if (!def) return [];
   const res = await pool.query(
     `
-    SELECT 
+    SELECT DISTINCT ON (s.item_key)
       s.item_key, s.currency, s.buy_price, s.sell_price, s.stock, s.available,
       i.name, i.rarity, i.slot
     FROM shop_items s
@@ -412,7 +420,9 @@ async function getShopItemsByKey(shopKey) {
     WHERE s.available = TRUE
       AND s.buy_price IS NOT NULL
       AND s.item_key = ANY($1)
-    ORDER BY s.currency, i.rarity DESC, i.name
+    ORDER BY s.item_key, 
+      CASE s.currency WHEN 'gold' THEN 1 WHEN 'arena_coins' THEN 2 ELSE 3 END,
+      i.rarity DESC, i.name
     `,
     [def.items]
   );
@@ -1292,6 +1302,7 @@ async function startMerchant(ctx, player, map) {
   const keyboard = [
     [Markup.button.callback(`Comprar (-${cost}g)`, "merch_buy")],
     [Markup.button.callback("Ignorar", "merch_ignore")],
+    [Markup.button.callback("⚔️ Caçar de novo", "action_hunt"), Markup.button.callback("🏠 Menu", "menu")],
   ];
   await sendCard(ctx, { fileId: EVENT_IMAGES.merchant || map.image_file_id, caption, keyboard });
   if (ctx.callbackQuery) ctx.answerCbQuery("Mercador!");
@@ -2551,13 +2562,14 @@ bot.action("merch_buy", async (ctx) => {
   events.delete(userId);
   await setPlayerState(player.id, STATES.MENU);
 
-  await ctx.reply("🤝 Você comprou uma poção e recuperou toda a vida!", Markup.inlineKeyboard([[Markup.button.callback("🏠 Menu", "menu")]]));
+  await ctx.reply("🤝 Você comprou uma poção e recuperou toda a vida!", Markup.inlineKeyboard([[Markup.button.callback("⚔️ Caçar de novo", "action_hunt"), Markup.button.callback("🏠 Menu", "menu")]]));
   if (ctx.callbackQuery) ctx.answerCbQuery();
 });
 
 bot.action("merch_ignore", async (ctx) => {
   events.delete(String(ctx.from.id));
-  await ctx.reply("Você ignorou o mercador.", Markup.inlineKeyboard([[Markup.button.callback("🏠 Menu", "menu")]]));
+  await setPlayerState(String(ctx.from.id), STATES.MENU);
+  await ctx.reply("Você ignorou o mercador.", Markup.inlineKeyboard([[Markup.button.callback("⚔️ Caçar de novo", "action_hunt"), Markup.button.callback("🏠 Menu", "menu")]]));
   if (ctx.callbackQuery) ctx.answerCbQuery();
 });
 
@@ -2735,7 +2747,7 @@ bot.action(/^shop_buy:([^:]+):([^:]+):(\d+)$/, async (ctx) => {
 
   await ctx.reply(
     `✅ Compra realizada!\n${escapeHtml(item.name)} x${qty}\n-${formatPrice(totalPrice, item.currency)}`,
-    { parse_mode: "HTML", reply_markup: Markup.inlineKeyboard([[Markup.button.callback("⬅️ Loja", `shop_open:${shopKey}`)]]) }
+    { parse_mode: "HTML", reply_markup: Markup.inlineKeyboard([[Markup.button.callback("⬅️ Loja", `shop_open:${shopKey}`)], [Markup.button.callback("🏠 Menu", "menu")]]).reply_markup }
   );
   if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
 });
