@@ -765,6 +765,15 @@ bot.command("setmobimg", async (ctx) => {
   ctx.reply(`Envie a imagem do mob *${key}* agora.`, { parse_mode: "Markdown" });
 });
 
+// Alias dedicado para mobs de dungeon (mesmo comportamento de setmobimg)
+bot.command("setmobdimg", async (ctx) => {
+  if (!isAdmin(ctx.from.id)) return ctx.reply("🚫 Apenas admin.");
+  const [, key] = ctx.message.text.split(" ");
+  if (!key) return ctx.reply("Use /setmobdimg <mob_key>");
+  pendingUploads.set(ctx.chat.id, { type: "mob", key });
+  ctx.reply(`Envie a imagem do mob de dungeon *${key}* agora.`, { parse_mode: "Markdown" });
+});
+
 bot.command("setmapimg", async (ctx) => {
   if (!isAdmin(ctx.from.id)) return ctx.reply("🚫 Apenas admin.");
   const [, key] = ctx.message.text.split(" ");
