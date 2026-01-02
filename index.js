@@ -635,6 +635,16 @@ async function maybeDropItem(mapKey, difficulty = 1, isBoss = false) {
   return null;
 }
 
+function buildCombatKeyboard() {
+  return [
+    [
+      Markup.button.callback("⚔️ Atacar", "combat_attack"),
+      Markup.button.callback("🧪 Consumíveis", "combat_consumables"),
+      Markup.button.callback("🏃 Fugir", "combat_flee"),
+    ],
+  ];
+}
+
 async function awardItem(playerId, item) {
   // Verifica se o inventário está cheio (20 slots máximo, equipados NÃO contam)
   const slotsRes = await pool.query(`
@@ -1330,7 +1340,7 @@ async function startCombat(ctx, player, map, isRare) {
     `❤️ ${player.hp}/${stats.total_hp} ${makeBar(player.hp, stats.total_hp, 8)}\n` +
     `⚡ Energia: ${player.energy}/${player.energy_max}`;
 
-  const keyboard = [[Markup.button.callback("⚔️ Atacar", "combat_attack"), Markup.button.callback("🏃 Fugir", "combat_flee")]];
+  const keyboard = buildCombatKeyboard();
 
   await sendCard(ctx, { fileId: mob.image_file_id, caption, keyboard });
   if (ctx.callbackQuery) ctx.answerCbQuery("Combate!");
@@ -1347,7 +1357,7 @@ async function renderCombatStatus(ctx, player, stats, fight, log) {
     `🎯 Turno: ${fight.turn}\n` +
     (log ? `\n📜 ${log}` : "");
 
-  const keyboard = [[Markup.button.callback("⚔️ Atacar", "combat_attack"), Markup.button.callback("🏃 Fugir", "combat_flee")]];
+  const keyboard = buildCombatKeyboard();
 
   try {
     await ctx.editMessageCaption(caption, {
@@ -1449,6 +1459,108 @@ async function handleFlee(ctx) {
     keyboard: [[Markup.button.callback("🏠 Menu", "menu")]],
   });
   if (ctx.callbackQuery) ctx.answerCbQuery("Fugiu");
+}
+
+async function listConsumables(playerId) {
+  const res = await pool.query(
+    `
+    SELECT inv.item_key, SUM(inv.qty)::int AS qty, i.name
+    FROM inventory inv
+    JOIN items i ON i.key = inv.item_key
+    WHERE inv.player_id = $1 AND inv.slot = 'consumable' AND inv.qty > 0
+    GROUP BY inv.item_key, i.name
+    ORDER BY i.name
+    `,
+    [playerId]
+  );
+  return res.rows;
+}
+
+async function handleConsumables(ctx) {
+  const userId = String(ctx.from.id);
+  const fight = fights.get(userId);
+  if (!fight) {
+    if (ctx.callbackQuery) ctx.answerCbQuery("Luta acabou.");
+    return;
+  }
+  const player = await getPlayer(userId, ctx.from.first_name);
+  const items = await listConsumables(player.id);
+  if (!items.length) {
+    await ctx.reply("❌ Você não tem consumíveis.");
+    if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
+    return;
+  }
+
+  const keyboard = items.map((it) => [Markup.button.callback(`${it.name} (${it.qty})`, `combat_use:${it.item_key}`)]);
+  keyboard.push([Markup.button.callback("⬅️ Voltar", "combat_attack")]);
+
+  await ctx.reply("🧪 Escolha um consumível (gasta o turno):", {
+    reply_markup: Markup.inlineKeyboard(keyboard).reply_markup,
+  });
+  if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
+}
+
+async function processMobAttack(ctx, fight, player, stats, logPrefix = "") {
+  // Mob attack
+  const mDmg = rollDamage(fight.mobAtk, stats.total_def, false);
+  const newHp = Math.max(0, player.hp - mDmg);
+  await pool.query("UPDATE players SET hp = $1 WHERE id = $2", [newHp, player.id]);
+  player.hp = newHp;
+  let log = logPrefix ? `${logPrefix}\n` : "";
+  log += `💔 ${fight.mobName} causou ${mDmg} de dano.`;
+
+  if (newHp <= 0) {
+    fights.delete(String(player.telegram_id || ctx.from.id));
+    const pen = await applyDeathPenalty(player);
+    await setPlayerState(player.id, STATES.MENU);
+    await sendCard(ctx, {
+      fileId: fight.mobImage,
+      caption: `💀 *DERROTA*\nPerdeu ${pen.xpLoss} XP.\nHP restaurado para ${pen.newHp}.`,
+      keyboard: [[Markup.button.callback("🏠 Menu", "menu")]],
+    });
+    if (ctx.callbackQuery) ctx.answerCbQuery("Morreu!").catch(() => {});
+    return;
+  }
+
+  fight.turn += 1;
+  await renderCombatStatus(ctx, player, stats, fight, log);
+  if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
+}
+
+async function handleUseConsumable(ctx) {
+  const userId = String(ctx.from.id);
+  const fight = fights.get(userId);
+  if (!fight) {
+    if (ctx.callbackQuery) ctx.answerCbQuery("Luta acabou.");
+    return;
+  }
+  const [, , key] = (ctx.match || []);
+  if (!key) {
+    if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
+    return;
+  }
+
+  let player = await getPlayer(userId, ctx.from.first_name);
+  let result;
+  try {
+    result = await useConsumable(player, key);
+  } catch (e) {
+    result = { ok: false, message: "Erro ao usar consumível." };
+  }
+
+  if (!result.ok) {
+    await ctx.reply(result.message || "Não foi possível usar este item.");
+    if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
+    return;
+  }
+
+  // Atualiza player/stats após uso
+  player = await getPlayer(userId, ctx.from.first_name);
+  const stats = await getPlayerStats(player);
+  const logMsg = `🧪 ${result.message || "Consumível usado."}`;
+
+  // Passa o turno para o mob atacar
+  await processMobAttack(ctx, fight, player, stats, logMsg);
 }
 
 // ------------- CALLBACKS & COMMANDS -------------
@@ -2449,6 +2561,8 @@ bot.action("merch_ignore", async (ctx) => {
 
 bot.action("combat_attack", handleAttack);
 bot.action("combat_flee", handleFlee);
+bot.action("combat_consumables", handleConsumables);
+bot.action(/^combat_use:(.+)$/, handleUseConsumable);
 
 bot.action(/equip_(.+)/, async (ctx) => {
   const id = ctx.match[1];
