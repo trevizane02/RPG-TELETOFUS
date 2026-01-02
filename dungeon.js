@@ -138,6 +138,7 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
       rooms: [],
       actions: new Map(),
       log: [],
+      bestDrop: null,
     };
     session.memberData.set(String(ctx.from.id), { name: base.player.name || 'Aventureiro', ready: true, hp: base.player.hp, maxHp: stats.total_hp, alive: true, dmg: 0 });
     sessions.set(code, session);
@@ -316,10 +317,14 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
   }
 
   async function awardRoomXp(session, roomIdx) {
-    const xp = session.def.xp[Math.min(roomIdx, session.def.xp.length - 1)] || 0;
+    const xpTotal = session.def.xp[Math.min(roomIdx, session.def.xp.length - 1)] || 0;
     const aliveMembers = [...session.members].filter((uid) => session.memberData.get(uid)?.alive);
+    if (!aliveMembers.length || xpTotal <= 0) return;
+    const share = Math.max(1, Math.floor(xpTotal / aliveMembers.length));
     for (const uid of aliveMembers) {
-      await pool.query('UPDATE players SET xp_total = xp_total + $1 WHERE telegram_id = $2', [xp, uid]);
+      await pool.query('UPDATE players SET xp_total = xp_total + $1 WHERE telegram_id = $2', [share, uid]);
+      const m = session.memberData.get(uid);
+      if (m) m.xp = (m.xp || 0) + share;
     }
   }
 
@@ -330,41 +335,61 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
     // XP final (boss index = rooms)
     await awardRoomXp(session, session.def.rooms);
 
-    // Ranking de dano
-    const ranking = [...session.memberData.entries()]
-      .map(([uid, m]) => ({ uid, name: m.name, dmg: m.dmg || 0 }))
-      .sort((a, b) => b.dmg - a.dmg);
-    if (ranking.length) {
-      msgLines.push('📊 Dano causado:');
-      ranking.forEach((r, idx) => {
-        msgLines.push(`${idx + 1}. ${r.name}: ${r.dmg}`);
-      });
-    }
+    const summary = [];
+    const rarityOrder = ['common','uncommon','rare','epic','legendary'];
 
     for (const uid of session.members) {
       const player = await getPlayer(uid);
-      if (!session.memberData.get(uid)?.alive) {
-        await pool.query('UPDATE players SET xp_total = GREATEST(0, xp_total - $1) WHERE id = $2', [Math.round((session.def.xp[session.def.rooms] || 0) * 0.3), player.id]);
+      const member = session.memberData.get(uid) || {};
+      if (!member.alive) {
+        const penalty = Math.round((session.def.xp[session.def.rooms] || 0) * 0.3);
+        await pool.query('UPDATE players SET xp_total = GREATEST(0, xp_total - $1) WHERE id = $2', [penalty, player.id]);
       }
-      // Drop individual
-      let lootMsg = '';
-      const drop = await maybeDropItem(session.mapKey, 3, true);
+      const drops = [];
+      const drop = await maybeDropItem(session.mapKey, 3, true, { dungeon: true });
       if (drop) {
         const result = await awardItem(player.id, drop);
         if (result.success) {
-          lootMsg += `Item: ${drop.name}\n`;
+          drops.push(drop.name);
+          if (!session.bestDrop || rarityOrder.indexOf(drop.rarity || 'common') > rarityOrder.indexOf((session.bestDrop.rarity)||'common')) {
+            session.bestDrop = drop;
+          }
         }
       }
-      // bone_key chance
       const chance = session.def.boneChance || 0;
       if (Math.random() < chance) {
         const bk = await pool.query("SELECT * FROM items WHERE key = 'bone_key'");
         const itemRow = bk.rows[0];
         if (itemRow) await awardItem(player.id, itemRow);
-        lootMsg += 'Chave óssea obtida!\n';
+        drops.push('Chave óssea');
+        if (!session.bestDrop) session.bestDrop = itemRow;
       }
-      await bot.telegram.sendMessage(uid, `${msgLines.join('\n')}\n${lootMsg || ''}`);
+      summary.push({
+        uid,
+        name: member.name || player.name || 'Aventureiro',
+        dmg: member.dmg || 0,
+        xp: member.xp || 0,
+        drops,
+        alive: member.alive !== false,
+      });
       await setPlayerState(player.id, STATES.MENU);
+    }
+
+    // Ordena e monta resumo único
+    summary.sort((a, b) => b.dmg - a.dmg);
+    msgLines.push('📊 Dano / XP / Drops:');
+    summary.forEach((s, idx) => {
+      msgLines.push(`${idx + 1}. ${s.name} — dano: ${s.dmg} | xp: ${s.xp || 0} | drops: ${s.drops.length ? s.drops.join(', ') : '—'}`);
+    });
+
+    const keyboard = Markup.inlineKeyboard([[Markup.button.callback('🏠 Menu', 'menu')]]).reply_markup;
+    const photo = (session.bestDrop && session.bestDrop.image_file_id) ? session.bestDrop.image_file_id : session.mapImage;
+    for (const uid of session.members) {
+      if (photo) {
+        await bot.telegram.sendPhoto(uid, photo, { caption: msgLines.join('\n'), reply_markup: keyboard });
+      } else {
+        await bot.telegram.sendMessage(uid, msgLines.join('\n'), { reply_markup: keyboard });
+      }
     }
     sessions.delete(session.code);
   }

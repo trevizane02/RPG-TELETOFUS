@@ -39,6 +39,7 @@ const STATES = {
   COMBAT: "COMBAT",
   INVENTORY: "INVENTORY",
   CLASS: "CLASS",
+  RENAME: "RENAME",
 };
 const CLASS_CONFIG = {
   guerreiro: { hp_max: 130, base_atk: 6, base_def: 4, base_crit: 4, desc: "Mais HP/DEF, segura dano e mantém consistência" },
@@ -54,7 +55,7 @@ const CLASS_WEAPONS = {
 const SHOP_DEFS = {
   vila: {
     name: "Loja da Vila",
-    items: ["health_potion", "energy_potion", "atk_tonic", "def_tonic", "crit_tonic", "dungeon_key", "novice_rod", "hunting_bow", "short_sword", "wooden_shield", "leather_armor"],
+    items: ["health_potion", "energy_potion", "atk_tonic", "def_tonic", "crit_tonic", "novice_rod", "hunting_bow", "short_sword", "wooden_shield", "leather_armor"],
   },
   matadores: {
     name: "Loja dos Matadores",
@@ -239,10 +240,7 @@ async function getPlayer(telegramId, name = "Aventureiro") {
     const updated = await pool.query("SELECT * FROM players WHERE id = $1", [player.id]);
     player = updated.rows[0];
   }
-  await pool.query("UPDATE players SET last_seen = NOW(), name = COALESCE($2, name) WHERE id = $1", [
-    player.id,
-    name,
-  ]);
+  await pool.query("UPDATE players SET last_seen = NOW() WHERE id = $1", [player.id]);
   return player;
 }
 
@@ -405,6 +403,10 @@ async function getOnlineStats() {
 
 function escapeHtml(str = "") {
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function sanitizeName(str = "") {
+  return str.replace(/[<>*_`~]/g, "").trim();
 }
 
 async function getShopItemsByKey(shopKey) {
@@ -620,13 +622,16 @@ async function sendCard(ctx, { fileId, caption, keyboard, parse_mode = "Markdown
   return ctx.reply(caption, opts);
 }
 
-async function maybeDropItem(mapKey, difficulty = 1, isBoss = false) {
+async function maybeDropItem(mapKey, difficulty = 1, isBoss = false, opts = {}) {
+  const { dungeon = false } = opts;
   const res = await pool.query("SELECT * FROM items WHERE map_key = $1 OR map_key IS NULL", [mapKey]);
   const items = res.rows;
   if (items.length === 0) return null;
 
   const drops = [];
   for (const item of items) {
+    if (item.boss_dungeon_only && !(dungeon && isBoss)) continue;
+    if (item.boss_only && !isBoss) continue;
     const base = Number(item.drop_rate || 0.01);
     const difficultyBonus = 1 + Math.max(0, difficulty - 1) * 0.35;
     const bonusFactor =
@@ -1029,17 +1034,27 @@ async function renderProfile(ctx) {
       ? `\n🧪 Buff: +${buff.atk || 0} ATK / +${buff.def || 0} DEF / +${buff.crit || 0}% CRIT (${formatBuffRemaining(player.temp_buff_expires_at) || "até acabar"})`
       : "";
 
+  const name = escapeHtml(player.name || "Aventureiro");
+  const className = escapeHtml(player.class || "guerreiro");
+  const mapName = escapeHtml(map.name);
   const caption =
-    `📜 *${player.name || "Aventureiro"}*\n` +
-    `Classe: ${player.class || "guerreiro"}\n` +
-    `Lv ${lvlInfo.level}  XP: ${player.xp_total} ${lvlInfo.xp_to_next ? `(Próx: ${lvlInfo.xp_to_next})` : ""}\n${xpBar}\n\n` +
+    `<b>📜 ${name}</b>\n` +
+    `Classe: ${className}\n` +
+    `Lv ${lvlInfo.level}  XP: ${player.xp_total}${lvlInfo.xp_to_next ? ` (Próx: ${lvlInfo.xp_to_next})` : ""}\n${xpBar}\n\n` +
     `⚔️ ATK ${stats.total_atk}  🛡️ DEF ${stats.total_def}  🎯 CRIT ${stats.total_crit}%\n` +
     `❤️ HP: ${player.hp}/${stats.total_hp} ${makeBar(player.hp, stats.total_hp, 8)}\n` +
     `⚡ Energia: ${player.energy}/${player.energy_max}\n` +
     `💰 Gold: ${player.gold}\n` +
-    `🗺️ Mapa: ${map.name}${buffText}`;
+    `🗺️ Mapa: ${mapName}${buffText}`;
 
-  await sendCard(ctx, { caption, keyboard: [[Markup.button.callback("🏠 Menu", "menu")]] });
+  await sendCard(ctx, {
+    caption,
+    keyboard: [
+      [Markup.button.callback("✏️ Renomear", "rename")],
+      [Markup.button.callback("🏠 Menu", "menu")],
+    ],
+    parse_mode: "HTML",
+  });
   if (ctx.callbackQuery) ctx.answerCbQuery();
 }
 
@@ -1235,7 +1250,7 @@ async function startChest(ctx, player, map) {
   await setPlayerState(player.id, STATES.MENU);
 
   let lootMsg = "";
-  const item = await maybeDropItem(map.key, map.difficulty, false);
+  const item = await maybeDropItem(map.key, map.difficulty, false, { dungeon: false });
   if (item) {
     const result = await awardItem(player.id, item);
     if (result.success) {
@@ -1408,7 +1423,7 @@ async function handleAttack(ctx) {
 
   if (fight.mobHp <= 0) {
     fights.delete(userId);
-    const item = await maybeDropItem(fight.mapKey, fight.mapDifficulty, fight.mobRarity === "boss");
+    const item = await maybeDropItem(fight.mapKey, fight.mapDifficulty, fight.mobRarity === "boss", { dungeon: false });
     await pool.query("UPDATE players SET xp_total = xp_total + $1, gold = gold + $2 WHERE id = $3", [
       fight.mobXp,
       fight.mobGold,
@@ -1616,6 +1631,12 @@ bot.action("descansar", async (ctx) => {
 
 bot.command("perfil", renderProfile);
 bot.action("perfil", renderProfile);
+bot.action("rename", async (ctx) => {
+  const player = await getPlayer(String(ctx.from.id), ctx.from.first_name);
+  await setPlayerState(player.id, STATES.RENAME);
+  await ctx.reply("Digite o novo nome do personagem (3-20 caracteres, sem emojis/markdown).");
+  if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
+});
 
 bot.command("inventario", renderInventory);
 bot.action("inventario", renderInventory);
@@ -1626,6 +1647,26 @@ bot.action("classe", renderClass);
 bot.command("comunidade", async (ctx) => {
   if (!COMMUNITY_URL) return ctx.reply("Link da comunidade não configurado.");
   return ctx.reply(`💬 Entre na comunidade: ${COMMUNITY_URL}`);
+});
+
+bot.on("text", async (ctx, next) => {
+  if (ctx.message.text && ctx.message.text.startsWith("/")) {
+    return next();
+  }
+  const player = await getPlayer(String(ctx.from.id), ctx.from.first_name);
+  if (player.state === STATES.RENAME) {
+    const name = sanitizeName(ctx.message.text || "");
+    if (name.length < 3 || name.length > 20) {
+      await ctx.reply("Nome inválido. Use entre 3 e 20 caracteres.");
+      return;
+    }
+    await pool.query("UPDATE players SET name = $1, state = $2 WHERE id = $3", [name, STATES.MENU, player.id]);
+    await ctx.reply(`Nome atualizado para: ${name}`, {
+      reply_markup: Markup.inlineKeyboard([[Markup.button.callback("🏠 Menu", "menu")]]).reply_markup,
+    });
+    return;
+  }
+  return next();
 });
 
 bot.action("trade_start", async (ctx) => {
@@ -2444,7 +2485,7 @@ async function runDungeon(session) {
     for (const uid of session.members) {
       const p = await getPlayer(uid);
       await pool.query("UPDATE players SET xp_total = xp_total + $1, gold = gold + $2 WHERE id = $3", [rewardXp, rewardGold, p.id]);
-      const item = await maybeDropItem(map.key, map.difficulty, mob.rarity === "boss");
+      const item = await maybeDropItem(map.key, map.difficulty, mob.rarity === "boss", { dungeon: false });
       if (item) await awardItem(p.id, item);
       await bot.telegram.sendMessage(
         uid,

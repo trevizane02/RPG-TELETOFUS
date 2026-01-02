@@ -37,9 +37,6 @@ Fonte: seeds em `migrate.js` (`SHOP_SEEDS`) e configuração de lojas (`SHOP_DEF
   - crystal_staff — arena_coins — buy 550 — sell null
   - crossbow — arena_coins — buy 520 — sell null
 
-- Chave
-  - dungeon_key — gold — buy 500 — sell 150
-
 - Premium (Tofus)
   - amulet_health — tofus — buy 100 — sell null
   - ring_protect — tofus — buy 100 — sell null
