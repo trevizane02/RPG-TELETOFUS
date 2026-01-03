@@ -1967,6 +1967,13 @@ async function renderTradeInventory(ctx, session, userId, page = 1) {
     [player.id]
   );
   const items = res.rows;
+  // adiciona opções de moedas
+  if (player.gold > 0) {
+    items.push({ item_key: "__gold", qty: player.gold, name: "Gold", rarity: "moeda", slot: "currency" });
+  }
+  if ((player.tofus || 0) > 0) {
+    items.push({ item_key: "__tofus", qty: player.tofus, name: "Tofus", rarity: "moeda", slot: "currency" });
+  }
   if (items.length === 0) {
     await sendCard(ctx, { caption: "Mochila vazia.", keyboard: [[Markup.button.callback("🏠 Menu", "menu")]] });
     if (ctx.callbackQuery) ctx.answerCbQuery();
@@ -2027,6 +2034,8 @@ async function renderTrade(ctx, session) {
   // Busca stats dos itens sendo oferecidos
   const getOfferText = async (playerId, offer) => {
     if (!offer) return "Nenhuma";
+    if (offer.item_key === "__gold") return `Gold x${offer.qty}`;
+    if (offer.item_key === "__tofus") return `Tofus x${offer.qty}`;
     
     // Busca um item exemplo com stats
     const itemRes = await pool.query(`
@@ -2180,17 +2189,33 @@ bot.action("trade_confirm", async (ctx) => {
     const ownerOffer = session.offers.owner;
     const guestOffer = session.offers.guest;
     
-    if (ownerOffer && !(await hasItemQty(owner.id, ownerOffer.item_key, ownerOffer.qty))) {
+    if (ownerOffer && ownerOffer.item_key === "__gold" && (owner.gold < ownerOffer.qty)) {
+      session.confirmed = { owner: false, guest: false };
+      return ctx.answerCbQuery("Dono sem gold suficiente.");
+    }
+    if (ownerOffer && ownerOffer.item_key === "__tofus" && ((owner.tofus || 0) < ownerOffer.qty)) {
+      session.confirmed = { owner: false, guest: false };
+      return ctx.answerCbQuery("Dono sem tofus suficiente.");
+    }
+    if (ownerOffer && !["__gold","__tofus"].includes(ownerOffer.item_key) && !(await hasItemQty(owner.id, ownerOffer.item_key, ownerOffer.qty))) {
       session.confirmed = { owner: false, guest: false };
       return ctx.answerCbQuery("Dono sem item suficiente.");
     }
-    if (guestOffer && !(await hasItemQty(guest.id, guestOffer.item_key, guestOffer.qty))) {
+    if (guestOffer && guestOffer.item_key === "__gold" && (guest.gold < guestOffer.qty)) {
+      session.confirmed = { owner: false, guest: false };
+      return ctx.answerCbQuery("Convidado sem gold suficiente.");
+    }
+    if (guestOffer && guestOffer.item_key === "__tofus" && ((guest.tofus || 0) < guestOffer.qty)) {
+      session.confirmed = { owner: false, guest: false };
+      return ctx.answerCbQuery("Convidado sem tofus suficiente.");
+    }
+    if (guestOffer && !["__gold","__tofus"].includes(guestOffer.item_key) && !(await hasItemQty(guest.id, guestOffer.item_key, guestOffer.qty))) {
       session.confirmed = { owner: false, guest: false };
       return ctx.answerCbQuery("Convidado sem item suficiente.");
     }
     
     // Valida slots do destinatário
-    if (ownerOffer) {
+    if (ownerOffer && !["__gold","__tofus"].includes(ownerOffer.item_key)) {
       const guestSlotsRes = await pool.query(`
         SELECT COUNT(*) as used FROM inventory WHERE player_id = $1 AND equipped = FALSE
       `, [guest.id]);
@@ -2200,7 +2225,7 @@ bot.action("trade_confirm", async (ctx) => {
         return ctx.answerCbQuery("Inventário do convidado está cheio!");
       }
     }
-    if (guestOffer) {
+    if (guestOffer && !["__gold","__tofus"].includes(guestOffer.item_key)) {
       const ownerSlotsRes = await pool.query(`
         SELECT COUNT(*) as used FROM inventory WHERE player_id = $1 AND equipped = FALSE
       `, [owner.id]);
@@ -2212,7 +2237,13 @@ bot.action("trade_confirm", async (ctx) => {
     }
     
     // Transfere items COM STATS ORIGINAIS (sem re-roll)
-    if (ownerOffer) {
+    if (ownerOffer && ownerOffer.item_key === "__gold") {
+      await pool.query("UPDATE players SET gold = gold - $1 WHERE id = $2", [ownerOffer.qty, owner.id]);
+      await pool.query("UPDATE players SET gold = gold + $1 WHERE id = $2", [ownerOffer.qty, guest.id]);
+    } else if (ownerOffer && ownerOffer.item_key === "__tofus") {
+      await pool.query("UPDATE players SET tofus = tofus - $1 WHERE id = $2", [ownerOffer.qty, owner.id]);
+      await pool.query("UPDATE players SET tofus = tofus + $1 WHERE id = $2", [ownerOffer.qty, guest.id]);
+    } else if (ownerOffer) {
       // Busca itens do owner com stats
       const ownerItemsRes = await pool.query(`
         SELECT id, item_key, slot, rolled_atk, rolled_def, rolled_hp, rolled_crit, rolled_rarity
@@ -2233,7 +2264,13 @@ bot.action("trade_confirm", async (ctx) => {
       }
     }
     
-    if (guestOffer) {
+    if (guestOffer && guestOffer.item_key === "__gold") {
+      await pool.query("UPDATE players SET gold = gold - $1 WHERE id = $2", [guestOffer.qty, guest.id]);
+      await pool.query("UPDATE players SET gold = gold + $1 WHERE id = $2", [guestOffer.qty, owner.id]);
+    } else if (guestOffer && guestOffer.item_key === "__tofus") {
+      await pool.query("UPDATE players SET tofus = tofus - $1 WHERE id = $2", [guestOffer.qty, guest.id]);
+      await pool.query("UPDATE players SET tofus = tofus + $1 WHERE id = $2", [guestOffer.qty, owner.id]);
+    } else if (guestOffer) {
       // Busca itens do guest com stats
       const guestItemsRes = await pool.query(`
         SELECT id, item_key, slot, rolled_atk, rolled_def, rolled_hp, rolled_crit, rolled_rarity
@@ -2255,21 +2292,25 @@ bot.action("trade_confirm", async (ctx) => {
     }
     
     // Atualiza contadores de slots
-    await pool.query(`
-      UPDATE players
-      SET inventory_slots_used = (
-        SELECT COUNT(*) FROM inventory WHERE player_id = $1 AND equipped = FALSE
-      )
-      WHERE id = $1
-    `, [owner.id]);
-    
-    await pool.query(`
-      UPDATE players
-      SET inventory_slots_used = (
-        SELECT COUNT(*) FROM inventory WHERE player_id = $1 AND equipped = FALSE
-      )
-      WHERE id = $1
-    `, [guest.id]);
+    // Atualiza contadores de slots (apenas se houve item transferido)
+    if (ownerOffer && !["__gold","__tofus"].includes(ownerOffer.item_key)) {
+      await pool.query(`
+        UPDATE players
+        SET inventory_slots_used = (
+          SELECT COUNT(*) FROM inventory WHERE player_id = $1 AND equipped = FALSE
+        )
+        WHERE id = $1
+      `, [guest.id]);
+    }
+    if (guestOffer && !["__gold","__tofus"].includes(guestOffer.item_key)) {
+      await pool.query(`
+        UPDATE players
+        SET inventory_slots_used = (
+          SELECT COUNT(*) FROM inventory WHERE player_id = $1 AND equipped = FALSE
+        )
+        WHERE id = $1
+      `, [owner.id]);
+    }
     
     tradeSessions.delete(found.code);
     await ctx.answerCbQuery("Troca concluída!");

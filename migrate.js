@@ -307,6 +307,12 @@ export async function migrate() {
           IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='players' AND column_name='rename_free_used') THEN
             ALTER TABLE players ADD COLUMN rename_free_used BOOLEAN NOT NULL DEFAULT false;
           END IF;
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='items' AND column_name='boss_only') THEN
+            ALTER TABLE items ADD COLUMN boss_only BOOLEAN NOT NULL DEFAULT false;
+          END IF;
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='items' AND column_name='boss_dungeon_only') THEN
+            ALTER TABLE items ADD COLUMN boss_dungeon_only BOOLEAN NOT NULL DEFAULT false;
+          END IF;
         END $$;
       `);
 
@@ -429,7 +435,9 @@ export async function migrate() {
           hp_max INT DEFAULT 0,
           crit_min INT DEFAULT 0,
           crit_max INT DEFAULT 0,
-          image_file_id TEXT
+          image_file_id TEXT,
+          boss_only BOOLEAN NOT NULL DEFAULT false,
+          boss_dungeon_only BOOLEAN NOT NULL DEFAULT false
         );
       `);
 
@@ -719,8 +727,8 @@ export async function migrate() {
       for (const it of ITEM_SEEDS) {
         await client.query(
           `
-          INSERT INTO items (key, name, slot, rarity, drop_rate, map_key, atk_min, atk_max, def_min, def_max, hp_min, hp_max, crit_min, crit_max)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+          INSERT INTO items (key, name, slot, rarity, drop_rate, map_key, atk_min, atk_max, def_min, def_max, hp_min, hp_max, crit_min, crit_max, boss_only, boss_dungeon_only)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
           ON CONFLICT (key) DO UPDATE
           SET name=EXCLUDED.name,
               slot=EXCLUDED.slot,
@@ -734,9 +742,28 @@ export async function migrate() {
               hp_min=EXCLUDED.hp_min,
               hp_max=EXCLUDED.hp_max,
               crit_min=EXCLUDED.crit_min,
-              crit_max=EXCLUDED.crit_max
+              crit_max=EXCLUDED.crit_max,
+              boss_only=EXCLUDED.boss_only,
+              boss_dungeon_only=EXCLUDED.boss_dungeon_only
           `,
-          [it.key, it.name, it.slot, it.rarity, it.drop_rate, it.map_key, it.atk_min || 0, it.atk_max || 0, it.def_min || 0, it.def_max || 0, it.hp_min || 0, it.hp_max || 0, it.crit_min || 0, it.crit_max || 0]
+          [
+            it.key,
+            it.name,
+            it.slot,
+            it.rarity,
+            it.drop_rate,
+            it.map_key,
+            it.atk_min || 0,
+            it.atk_max || 0,
+            it.def_min || 0,
+            it.def_max || 0,
+            it.hp_min || 0,
+            it.hp_max || 0,
+            it.crit_min || 0,
+            it.crit_max || 0,
+            it.boss_only || false,
+            it.boss_dungeon_only || false,
+          ]
         );
       }
 
@@ -783,6 +810,10 @@ export async function migrate() {
           [shop.item_key, shop.currency, shop.buy_price, shop.sell_price]
         );
       }
+
+      // Atualiza flags boss_only/boss_dungeon_only para itens existentes
+      await client.query(`UPDATE items SET boss_only = true WHERE key = 'dungeon_key'`);
+      await client.query(`UPDATE items SET boss_dungeon_only = true WHERE key IN ('brass_ring','sapphire_amulet','leather_boots','silver_ring','platinum_amulet','iron_boots')`);
 
 
       // CLEANUP LEGACY DATA (mapas/mobs/itens fora dos seeds)
