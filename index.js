@@ -1835,9 +1835,11 @@ bot.action(/trade_offer_pick_(.+)/, async (ctx) => {
     ],
     [Markup.button.callback("⬅️ Voltar", `trade_offer_page_${page}`)],
   ];
+  const itemLabel = escapeHtml(slice.find((i) => i.item_key === itemKey)?.name || itemKey);
   await sendCard(ctx, {
-    caption: `📦 Selecionar quantidade\nItem: ${itemKey}\nVocê tem: ${qty}`,
+    caption: `📦 Selecionar quantidade\nItem: ${itemLabel}\nVocê tem: ${qty}`,
     keyboard: buttons,
+    parse_mode: "HTML",
   });
 });
 
@@ -2065,17 +2067,18 @@ async function renderTrade(ctx, session) {
   const guestOfferText = guest ? await getOfferText(guest.id, session.offers.guest) : "Nenhuma";
   
   const caption =
-    `🤝 *Troca*\n` +
-    `Código: \`${session.code}\`\n` +
-    `Dono: ${owner.name}\n` +
-    `Convidado: ${guest ? guest.name : "aguardando"}\n\n` +
-    `📦 Oferta de ${owner.name}:\n${ownerOfferText}\n\n` +
-    `📦 Oferta de ${guest ? guest.name : "???"}: \n${guestOfferText}\n\n` +
+    `🤝 <b>Troca</b>\n` +
+    `Código: <code>${escapeHtml(session.code)}</code>\n` +
+    `Dono: ${escapeHtml(owner.name)}\n` +
+    `Convidado: ${guest ? escapeHtml(guest.name) : "aguardando"}\n\n` +
+    `📦 Oferta de ${escapeHtml(owner.name)}:\n${escapeHtml(ownerOfferText)}\n\n` +
+    `📦 Oferta de ${guest ? escapeHtml(guest.name) : "???"}:\n${escapeHtml(guestOfferText)}\n\n` +
     `Confirmações: dono ${session.confirmed.owner ? "✅" : "❌"} | convidado ${session.confirmed.guest ? "✅" : "❌"}\n` +
     `Expira em: ${Math.max(0, Math.floor((session.expires - Date.now()) / 60000))} min`;
 
   await sendCard(ctx, {
     caption,
+    parse_mode: "HTML",
     keyboard: [
       [Markup.button.callback("🧳 Minha oferta", "trade_offer"), Markup.button.callback("🔁 Atualizar", "trade_refresh")],
       [Markup.button.callback("✅ Confirmar", "trade_confirm"), Markup.button.callback("🧹 Limpar oferta", "trade_clear")],
