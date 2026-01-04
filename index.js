@@ -2128,8 +2128,10 @@ bot.action("merch_buy", async (ctx) => {
 });
 
 bot.action("merch_ignore", async (ctx) => {
-  events.delete(String(ctx.from.id));
-  await setPlayerState(String(ctx.from.id), STATES.MENU);
+  const userId = String(ctx.from.id);
+  events.delete(userId);
+  const player = await getPlayer(userId, ctx.from.first_name);
+  await setPlayerState(player.id, STATES.MENU);
   await ctx.reply("Você ignorou o mercador.", Markup.inlineKeyboard([[Markup.button.callback("⚔️ Caçar de novo", "action_hunt"), Markup.button.callback("🏠 Menu", "menu")]]));
   if (ctx.callbackQuery) ctx.answerCbQuery();
 });
