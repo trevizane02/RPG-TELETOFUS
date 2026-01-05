@@ -364,8 +364,12 @@ export async function migrate() {
         );
       `);
 
-      console.log("Seeding XP curve (rápida no início)...");
-      await client.query("TRUNCATE level_xp");
+      const existingLevels = await client.query("SELECT COUNT(*)::int AS cnt FROM level_xp");
+      const hasFullCurve = Number(existingLevels.rows[0]?.cnt || 0) >= 50;
+      if (!hasFullCurve) {
+        console.log("Seeding XP curve (rápida no início)...");
+        await client.query("TRUNCATE level_xp");
+      }
 
       const baseXp = 60; // L1->L2
       const mult = 1.32; // crescimento moderado
@@ -376,14 +380,16 @@ export async function migrate() {
         if (xp <= prevXp) xp = prevXp + 1;
         prevXp = xp;
 
-        await client.query(
-          `
-          INSERT INTO level_xp (level, xp_to_next)
-          VALUES ($1, $2)
-          ON CONFLICT (level) DO UPDATE SET xp_to_next = EXCLUDED.xp_to_next
-          `,
-          [l, xp]
-        );
+        if (!hasFullCurve) {
+          await client.query(
+            `
+            INSERT INTO level_xp (level, xp_to_next)
+            VALUES ($1, $2)
+            ON CONFLICT (level) DO UPDATE SET xp_to_next = EXCLUDED.xp_to_next
+            `,
+            [l, xp]
+          );
+        }
       }
 
       // XP RECALC (roda uma vez para adaptar jogadores da curva antiga para a nova)
