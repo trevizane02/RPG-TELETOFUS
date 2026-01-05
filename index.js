@@ -751,6 +751,16 @@ if (!botToken) {
 }
 const bot = new Telegraf(botToken);
 
+// Bloqueia comandos no grupo, exceto /event (drop relâmpago)
+bot.use((ctx, next) => {
+  const isGroup = ctx.chat && (ctx.chat.type === "group" || ctx.chat.type === "supergroup");
+  if (!isGroup) return next();
+  const text = ctx.message?.text || "";
+  if (text.startsWith("/event")) return next();
+  // ignora comandos e callbacks no grupo para não iniciar jogo
+  return;
+});
+
 bot.use(async (ctx, next) => {
   try {
     if (ctx && typeof ctx.answerCbQuery === "function") {

@@ -87,7 +87,6 @@ export function registerEventRewards(bot, deps) {
       if (!res?.success) break;
     }
     if (ctx.callbackQuery) await ctx.answerCbQuery("Você pegou!");
-    await ctx.reply(`🎉 Você pegou ${item?.name || reward.item_key}!`);
 
     // tenta editar mensagem original para mostrar vencedor
     if (reward.chat_id && reward.message_id) {
