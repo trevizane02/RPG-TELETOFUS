@@ -557,13 +557,22 @@ export async function migrate() {
       // Drop old unique index if exists
       await client.query(`DROP INDEX IF EXISTS inventory_player_item_key`);
       
-      // Dedup consumables into single stack before unique index
+      // Normaliza slot consumível e deduplica stacks antes do índice único
+      await client.query(`
+        UPDATE inventory inv
+        SET slot = 'consumable'
+        FROM items i
+        WHERE inv.item_key = i.key
+          AND i.slot = 'consumable'
+      `);
+
       await client.query(`
         WITH cte AS (
-          SELECT player_id, item_key, MIN(id) AS keep_id, SUM(qty) AS total
-          FROM inventory
-          WHERE slot = 'consumable'
-          GROUP BY player_id, item_key
+          SELECT inv.player_id, inv.item_key, MIN(inv.id) AS keep_id, SUM(inv.qty) AS total
+          FROM inventory inv
+          JOIN items i ON i.key = inv.item_key
+          WHERE i.slot = 'consumable'
+          GROUP BY inv.player_id, inv.item_key
           HAVING COUNT(*) > 1
         )
         UPDATE inventory inv
@@ -574,16 +583,16 @@ export async function migrate() {
 
       await client.query(`
         WITH cte AS (
-          SELECT player_id, item_key, MIN(id) AS keep_id
-          FROM inventory
-          WHERE slot = 'consumable'
-          GROUP BY player_id, item_key
+          SELECT inv.player_id, inv.item_key, MIN(inv.id) AS keep_id
+          FROM inventory inv
+          JOIN items i ON i.key = inv.item_key
+          WHERE i.slot = 'consumable'
+          GROUP BY inv.player_id, inv.item_key
           HAVING COUNT(*) > 1
         )
         DELETE FROM inventory inv
         USING cte c
-        WHERE inv.slot = 'consumable'
-          AND inv.player_id = c.player_id
+        WHERE inv.player_id = c.player_id
           AND inv.item_key = c.item_key
           AND inv.id <> c.keep_id;
       `);
