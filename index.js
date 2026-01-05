@@ -6,6 +6,7 @@ import { migrate } from "./migrate.js";
 import { registerDungeon } from "./dungeon.js";
 import { registerTrade } from "./trade.js";
 import { registerEventRewards } from "./event_rewards.js";
+import { registerArena } from "./arena.js";
 
 // --------------------------------------
 // Bootstrap HTTP (health) + migrations
@@ -118,8 +119,6 @@ let LEVEL_XP_CACHE = [];
 const fights = new Map(); // userId -> fight state
 const events = new Map(); // userId -> merchant pending
 const pendingUploads = new Map(); // chatId -> { type, key }
-const arenaQueue = []; // array of player ids waiting
-const arenaFights = new Map(); // userId -> fight data (pvp)
 const dungeons = new Map(); // code -> dungeon session
 
 // --------------------------------------
@@ -281,6 +280,10 @@ async function getPlayerStats(player) {
     total_def: player.base_def + Number(bonus.def_bonus || 0) + (buff.def || 0),
     total_hp: player.hp_max + Number(bonus.hp_bonus || 0),
     total_crit: player.base_crit + Number(bonus.crit_bonus || 0) + (buff.crit || 0),
+    gear_atk: Number(bonus.atk_bonus || 0),
+    gear_def: Number(bonus.def_bonus || 0),
+    gear_hp: Number(bonus.hp_bonus || 0),
+    gear_crit: Number(bonus.crit_bonus || 0),
   };
 }
 
@@ -815,6 +818,14 @@ bot.command("setitemimg", async (ctx) => {
   ctx.reply(`Envie a imagem do item *${key}* agora.`, { parse_mode: "Markdown" });
 });
 
+const ARENA_RANK_IMG_KEYS = [
+  "arena_rank_sangue_novo",
+  "arena_rank_desafiador",
+  "arena_rank_veterano",
+  "arena_rank_campeao",
+  "arena_rank_lenda",
+];
+
 bot.command("seteventimg", async (ctx) => {
   if (!isAdmin(ctx.from.id)) return ctx.reply("🚫 Apenas admin.");
   const [, keyRaw] = ctx.message.text.split(" ");
@@ -824,6 +835,17 @@ bot.command("seteventimg", async (ctx) => {
   }
   pendingUploads.set(ctx.chat.id, { type: "event", key });
   ctx.reply(`Envie a imagem do evento *${key}* agora.`, { parse_mode: "Markdown" });
+});
+
+bot.command("setarenaimg", async (ctx) => {
+  if (!isAdmin(ctx.from.id)) return ctx.reply("🚫 Apenas admin.");
+  const [, keyRaw] = ctx.message.text.split(" ");
+  const key = (keyRaw || "").toLowerCase();
+  if (!ARENA_RANK_IMG_KEYS.includes(key)) {
+    return ctx.reply(`Use /setarenaimg <${ARENA_RANK_IMG_KEYS.join("|")}>`);
+  }
+  pendingUploads.set(ctx.chat.id, { type: "arena", key });
+  ctx.reply(`Envie a imagem do brasão de arena *${key}* agora.`, { parse_mode: "Markdown" });
 });
 
 bot.command("setshopimg", async (ctx) => {
@@ -940,6 +962,17 @@ bot.on("photo", async (ctx) => {
     );
     EVENT_IMAGES[pending.key] = fileId;
     updated = true;
+  } else if (pending.type === "arena") {
+    await pool.query(
+      `
+      INSERT INTO event_images (event_key, file_id, updated_at)
+      VALUES ($1, $2, NOW())
+      ON CONFLICT (event_key) DO UPDATE SET file_id = EXCLUDED.file_id, updated_at = NOW()
+    `,
+      [pending.key, fileId]
+    );
+    EVENT_IMAGES[pending.key] = fileId;
+    updated = true;
   } else if (pending.type === "shop") {
     const eventKey = `shop_${pending.key}`;
     await pool.query(
@@ -994,7 +1027,7 @@ async function renderMenu(ctx) {
     [Markup.button.callback("⚔️ Caçar", "action_hunt"), Markup.button.callback("🗺️ Viajar", "travel_page_1")],
     [Markup.button.callback("🧳 Inventário", "inventario"), Markup.button.callback("👤 Perfil", "perfil")],
     [Markup.button.callback("🏪 Loja", "loja_menu"), Markup.button.callback("🤝 Troca", "trade_start")],
-    [Markup.button.callback("🏟️ Arena", "arena_queue"), Markup.button.callback("🗝️ Masmorra", "dungeon_menu")],
+    [Markup.button.callback("🏟️ Arena", "arena_menu_v2"), Markup.button.callback("🗝️ Masmorra", "dungeon_menu")],
     [Markup.button.callback(`👥 Online (${online.total})`, "online_stats"), Markup.button.callback("⚡ Energia", "energia")],
     [Markup.button.callback("💎 VIP", "vip")],
   ];
@@ -1701,18 +1734,6 @@ bot.on("text", async (ctx, next) => {
   return next();
 });
 
-bot.action("arena_queue", async (ctx) => {
-  const userId = String(ctx.from.id);
-  if (isInArenaQueue(userId) || arenaFights.has(userId)) {
-    await ctx.answerCbQuery("Você já está na arena.");
-    return;
-  }
-  arenaQueue.push(userId);
-  await ctx.answerCbQuery("Fila da arena");
-  await ctx.reply("⏳ Aguardando oponente na arena...", Markup.inlineKeyboard([[Markup.button.callback("🏠 Menu", "menu")]]));
-  await tryMatchArena();
-});
-
 async function renderOnlineStats(ctx) {
   const maps = await getMapList();
   const mapName = new Map(maps.map((m) => [m.key, m.name]));
@@ -1787,180 +1808,6 @@ bot.action(/usec_(.+)/, async (ctx) => {
   await ctx.answerCbQuery("Consumido");
   await ctx.reply(res.message, Markup.inlineKeyboard([[Markup.button.callback("🏠 Menu", "menu")]]));
   return renderInventory(ctx);
-});
-
-// ---------- ARENA (PvP simples) ----------
-function isInArenaQueue(userId) {
-  return arenaQueue.includes(userId);
-}
-
-async function startArenaFight(p1Id, p2Id) {
-  const p1 = await getPlayer(p1Id);
-  const p2 = await getPlayer(p2Id);
-  const s1 = await getPlayerStats(p1);
-  const s2 = await getPlayerStats(p2);
-
-  const fight1 = {
-    opponentId: p2Id,
-    hp: p1.hp,
-    maxHp: s1.total_hp,
-    atk: s1.total_atk,
-    def: s1.total_def,
-    crit: s1.total_crit,
-    turn: 1,
-  };
-  const fight2 = {
-    opponentId: p1Id,
-    hp: p2.hp,
-    maxHp: s2.total_hp,
-    atk: s2.total_atk,
-    def: s2.total_def,
-    crit: s2.total_crit,
-    turn: 1,
-  };
-  arenaFights.set(p1Id, fight1);
-  arenaFights.set(p2Id, fight2);
-
-  await bot.telegram.sendMessage(
-    p1Id,
-    `🏟️ Arena iniciada contra ${p2.name}\nHP: ${fight1.hp}/${fight1.maxHp}`,
-    { reply_markup: Markup.inlineKeyboard([[Markup.button.callback("⚔️ Atacar", "arena_attack"), Markup.button.callback("🏳️ Desistir", "arena_surrender")]]).reply_markup }
-  );
-  await bot.telegram.sendMessage(
-    p2Id,
-    `🏟️ Arena iniciada contra ${p1.name}\nHP: ${fight2.hp}/${fight2.maxHp}`,
-    { reply_markup: Markup.inlineKeyboard([[Markup.button.callback("⚔️ Atacar", "arena_attack"), Markup.button.callback("🏳️ Desistir", "arena_surrender")]]).reply_markup }
-  );
-}
-
-async function tryMatchArena() {
-  if (arenaQueue.length < 2) return;
-  const p1Id = arenaQueue.shift();
-  const p2Id = arenaQueue.shift();
-  await startArenaFight(p1Id, p2Id);
-}
-
-async function renderArenaStatus(userId, log) {
-  const fight = arenaFights.get(userId);
-  if (!fight) return;
-  const opponentFight = arenaFights.get(fight.opponentId);
-  const user = await getPlayer(userId);
-  const opp = await getPlayer(fight.opponentId);
-  const caption =
-    `🏟️ Arena vs ${opp.name}\n` +
-    `Você: ${fight.hp}/${fight.maxHp} ${makeBar(fight.hp, fight.maxHp, 8)}\n` +
-    `${opp.name}: ${opponentFight?.hp ?? 0}/${opponentFight?.maxHp ?? 0}\n` +
-    (log ? `\n${log}` : "");
-
-  await bot.telegram.sendMessage(
-    userId,
-    caption,
-    { reply_markup: Markup.inlineKeyboard([[Markup.button.callback("⚔️ Atacar", "arena_attack"), Markup.button.callback("🏳️ Desistir", "arena_surrender")]]).reply_markup }
-  );
-}
-
-bot.command("arena", async (ctx) => {
-  const userId = String(ctx.from.id);
-  if (isInArenaQueue(userId) || arenaFights.has(userId)) return ctx.reply("Você já está na arena.");
-  arenaQueue.push(userId);
-  await ctx.reply("⏳ Aguardando oponente na arena...");
-  await tryMatchArena();
-});
-
-bot.command("arena_cancel", async (ctx) => {
-  const userId = String(ctx.from.id);
-  const idx = arenaQueue.indexOf(userId);
-  if (idx >= 0) {
-    arenaQueue.splice(idx, 1);
-    return ctx.reply("Fila da arena cancelada.");
-  }
-  ctx.reply("Você não está na fila.");
-});
-
-bot.action("arena_attack", async (ctx) => {
-  const userId = String(ctx.from.id);
-  const fight = arenaFights.get(userId);
-  if (!fight) return ctx.answerCbQuery("Sem luta");
-  const oppFight = arenaFights.get(fight.opponentId);
-  if (!oppFight) {
-    arenaFights.delete(userId);
-    return ctx.answerCbQuery("Oponente indisponível");
-  }
-
-  const isCrit = Math.random() * 100 < fight.crit;
-  const dmg = rollDamage(fight.atk, oppFight.def, isCrit);
-  oppFight.hp = Math.max(0, oppFight.hp - dmg);
-
-  let log = `${isCrit ? "🔥 CRIT! " : ""}Você causou ${dmg} dano.`;
-
-  if (oppFight.hp <= 0) {
-    const winner = await getPlayer(userId);
-    const loser = await getPlayer(fight.opponentId);
-    const trophyGain = 15;
-    const trophyLoss = 10;
-    await pool.query("UPDATE players SET trophies = GREATEST(0, trophies + $1), arena_coins = arena_coins + $2 WHERE id = $3", [
-      trophyGain,
-      5,
-      winner.id,
-    ]);
-    await pool.query("UPDATE players SET trophies = GREATEST(0, trophies - $1) WHERE id = $2", [trophyLoss, loser.id]);
-    arenaFights.delete(userId);
-    arenaFights.delete(fight.opponentId);
-    await ctx.answerCbQuery("Vitória!");
-    await ctx.reply(`🏆 Você venceu ${loser.name}!\n+${trophyGain} troféus\n+5 arena coins`);
-    await bot.telegram.sendMessage(fight.opponentId, `😵 Você perdeu para ${winner.name}\n-${trophyLoss} troféus`);
-    return;
-  }
-
-  // Oponente contra-ataca automaticamente
-  const oppCrit = Math.random() * 100 < oppFight.crit;
-  const oppDmg = rollDamage(oppFight.atk, fight.def, oppCrit);
-  fight.hp = Math.max(0, fight.hp - oppDmg);
-  log += `\n${oppCrit ? "🔥 CRIT! " : ""}Oponente causou ${oppDmg} dano em você.`;
-
-  if (fight.hp <= 0) {
-    const winner = await getPlayer(fight.opponentId);
-    const loser = await getPlayer(userId);
-    const trophyGain = 15;
-    const trophyLoss = 10;
-    await pool.query("UPDATE players SET trophies = GREATEST(0, trophies + $1), arena_coins = arena_coins + $2 WHERE id = $3", [
-      trophyGain,
-      5,
-      winner.id,
-    ]);
-    await pool.query("UPDATE players SET trophies = GREATEST(0, trophies - $1) WHERE id = $2", [trophyLoss, loser.id]);
-    arenaFights.delete(userId);
-    arenaFights.delete(fight.opponentId);
-    await ctx.answerCbQuery("Derrota");
-    await ctx.reply(`😵 Você perdeu para ${winner.name}\n-${trophyLoss} troféus`);
-    await bot.telegram.sendMessage(fight.opponentId, `🏆 Você venceu ${loser.name}!\n+${trophyGain} troféus\n+5 arena coins`);
-    return;
-  }
-
-  await ctx.answerCbQuery();
-  await renderArenaStatus(userId, log);
-  await renderArenaStatus(fight.opponentId, `Você recebeu ${dmg} e causou ${oppDmg}`);
-});
-
-bot.action("arena_surrender", async (ctx) => {
-  const userId = String(ctx.from.id);
-  const fight = arenaFights.get(userId);
-  if (!fight) return ctx.answerCbQuery("Sem luta");
-  const winner = await getPlayer(fight.opponentId);
-  const loser = await getPlayer(userId);
-  const trophyGain = 10;
-  const trophyLoss = 8;
-  await pool.query("UPDATE players SET trophies = GREATEST(0, trophies + $1), arena_coins = arena_coins + $2 WHERE id = $3", [
-    trophyGain,
-    3,
-    winner.id,
-  ]);
-  await pool.query("UPDATE players SET trophies = GREATEST(0, trophies - $1) WHERE id = $2", [trophyLoss, loser.id]);
-  arenaFights.delete(userId);
-  arenaFights.delete(fight.opponentId);
-  await ctx.answerCbQuery("Desistiu");
-  await ctx.reply(`Você desistiu. -${trophyLoss} troféus.`);
-  await bot.telegram.sendMessage(fight.opponentId, `Oponente desistiu. +${trophyGain} troféus, +3 arena coins`);
 });
 
 // ---------- DUNGEONS (co-op simples) ----------
@@ -2490,6 +2337,18 @@ registerDungeon(bot, {
   rollDamage,
   hasItemQty,
   consumeItem,
+  awardItem,
+  STATES,
+});
+
+registerArena(bot, {
+  pool,
+  getPlayer,
+  getPlayerStats,
+  makeBar,
+  rollDamage,
+  sendCard,
+  setPlayerState,
   awardItem,
   STATES,
 });

@@ -303,6 +303,7 @@ export function registerArena(bot, deps) {
   }
 
   bot.action("arena_menu", showArenaMenu);
+  bot.action("arena_menu_v2", showArenaMenu);
   // Alias para callbacks/menus antigos
   bot.action("arena", showArenaMenu);
 
