@@ -91,22 +91,22 @@ const ITEM_SEEDS = [
   { key: "hunting_bow", name: "Arco de Caça", slot: "weapon", rarity: "uncommon", atk_min: 2, atk_max: 5, crit_min: 2, crit_max: 5, drop_rate: 0.02, map_key: "plains" },
   { key: "mage_staff", name: "Cajado do Aprendiz", slot: "weapon", rarity: "uncommon", atk_min: 2, atk_max: 6, crit_min: 2, crit_max: 5, drop_rate: 0.02, map_key: "forest" },
   { key: "novice_rod", name: "Cajado Novato", slot: "weapon", rarity: "common", atk_min: 1, atk_max: 4, crit_min: 1, crit_max: 3, drop_rate: 0.025, map_key: "plains" },
-  { key: "knight_blade", name: "Lâmina do Cavaleiro", slot: "weapon", rarity: "rare", atk_min: 5, atk_max: 9, crit_min: 2, crit_max: 6, drop_rate: 0.008, map_key: "desert" },
+  { key: "knight_blade", name: "Lâmina do Cavaleiro", slot: "weapon", rarity: "rare", atk_min: 4, atk_max: 7, crit_min: 1, crit_max: 4, drop_rate: 0.01, map_key: "swamp" },
   { key: "longbow", name: "Arco Longo", slot: "weapon", rarity: "uncommon", atk_min: 3, atk_max: 7, crit_min: 3, crit_max: 6, drop_rate: 0.015, map_key: "forest" },
-  { key: "crossbow", name: "Besta Reforçada", slot: "weapon", rarity: "rare", atk_min: 6, atk_max: 10, crit_min: 2, crit_max: 5, drop_rate: 0.01, map_key: "mountain" },
+  { key: "crossbow", name: "Besta Reforçada", slot: "weapon", rarity: "rare", atk_min: 4, atk_max: 7, crit_min: 1, crit_max: 3, drop_rate: 0.01, map_key: "swamp" },
   { key: "arcane_wand", name: "Varinha Arcana", slot: "weapon", rarity: "uncommon", atk_min: 3, atk_max: 7, crit_min: 2, crit_max: 5, drop_rate: 0.015, map_key: "grave" },
-  { key: "crystal_staff", name: "Cajado de Cristal", slot: "weapon", rarity: "rare", atk_min: 6, atk_max: 11, crit_min: 3, crit_max: 6, drop_rate: 0.01, map_key: "desert" },
+  { key: "crystal_staff", name: "Cajado de Cristal", slot: "weapon", rarity: "rare", atk_min: 4, atk_max: 7, crit_min: 2, crit_max: 4, drop_rate: 0.01, map_key: "swamp" },
 
   // Armors
   { key: "leather_armor", name: "Armadura de Couro", slot: "armor", rarity: "common", def_min: 1, def_max: 3, hp_min: 0, hp_max: 5, drop_rate: 0.03, map_key: "plains" },
   { key: "chain_armor", name: "Cota de Malha", slot: "armor", rarity: "uncommon", def_min: 2, def_max: 5, hp_min: 0, hp_max: 8, drop_rate: 0.02, map_key: "forest" },
-  { key: "plate_armor", name: "Armadura de Placas", slot: "armor", rarity: "rare", def_min: 4, def_max: 8, hp_min: 8, hp_max: 16, drop_rate: 0.008, map_key: "mountain" },
+  { key: "plate_armor", name: "Armadura de Placas", slot: "armor", rarity: "rare", def_min: 3, def_max: 6, hp_min: 6, hp_max: 10, drop_rate: 0.01, map_key: "swamp" },
   { key: "dark_robe", name: "Manto Sombrio", slot: "armor", rarity: "rare", def_min: 0, def_max: 2, hp_min: 12, hp_max: 20, drop_rate: 0.008, map_key: "grave" },
 
   // Shields
   { key: "wooden_shield", name: "Escudo de Madeira", slot: "shield", rarity: "common", def_min: 1, def_max: 3, hp_min: 0, hp_max: 3, drop_rate: 0.03, map_key: "plains" },
   { key: "steel_shield", name: "Escudo de Aço", slot: "shield", rarity: "uncommon", def_min: 2, def_max: 5, hp_min: 0, hp_max: 5, drop_rate: 0.02, map_key: "forest" },
-  { key: "tower_shield", name: "Escudo Torre", slot: "shield", rarity: "rare", def_min: 4, def_max: 8, hp_min: 0, hp_max: 8, drop_rate: 0.008, map_key: "mountain" },
+  { key: "tower_shield", name: "Escudo Torre", slot: "shield", rarity: "rare", def_min: 3, def_max: 6, hp_min: 1, hp_max: 6, drop_rate: 0.01, map_key: "swamp" },
 
   // Acessórios (Plains) - somente boss de masmorra
   { key: "brass_ring", name: "Anel de Latão", slot: "ring", rarity: "uncommon", atk_min: 1, atk_max: 4, crit_min: 1, crit_max: 2, drop_rate: 0.01, map_key: "plains", boss_dungeon_only: true },
@@ -840,13 +840,6 @@ export async function migrate() {
         { item_key: 'novice_rod', currency: 'gold', buy_price: 90, sell_price: 28 },
         { item_key: 'hunting_bow', currency: 'gold', buy_price: 110, sell_price: 32 },
         
-        // Itens raros (Arena Coins)
-        { item_key: 'knight_blade', currency: 'arena_coins', buy_price: 500, sell_price: null },
-        { item_key: 'plate_armor', currency: 'arena_coins', buy_price: 600, sell_price: null },
-        { item_key: 'tower_shield', currency: 'arena_coins', buy_price: 450, sell_price: null },
-        { item_key: 'crystal_staff', currency: 'arena_coins', buy_price: 550, sell_price: null },
-        { item_key: 'crossbow', currency: 'arena_coins', buy_price: 520, sell_price: null },
-
         // VIP/Premium (Tofus - moeda premium)
         { item_key: 'amulet_health', currency: 'tofus', buy_price: 100, sell_price: null },
         { item_key: 'ring_protect', currency: 'tofus', buy_price: 100, sell_price: null },

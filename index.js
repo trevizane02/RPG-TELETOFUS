@@ -61,11 +61,11 @@ const SHOP_DEFS = {
   },
   matadores: {
     name: "Loja dos Matadores",
-    items: ["sabre", "battle_axe", "longbow", "crossbow", "mage_staff", "arcane_wand", "plate_armor", "steel_shield", "tower_shield"],
+    items: ["sabre", "battle_axe", "longbow", "mage_staff", "arcane_wand", "steel_shield"],
   },
   castelo: {
     name: "Loja do Castelo",
-    items: ["knight_blade", "crystal_staff", "amulet_health", "ring_protect"],
+    items: ["amulet_health", "ring_protect"],
   },
 };
 
