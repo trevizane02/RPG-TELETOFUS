@@ -632,6 +632,21 @@ export async function migrate() {
         );
       `);
 
+      // EVENT REWARDS (drop rápido no grupo)
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS event_rewards (
+          id SERIAL PRIMARY KEY,
+          chat_id TEXT NOT NULL,
+          message_id TEXT,
+          item_key TEXT NOT NULL REFERENCES items(key),
+          qty INT NOT NULL DEFAULT 1,
+          claimed_by UUID REFERENCES players(id),
+          claimed_at TIMESTAMPTZ,
+          created_by TEXT,
+          created_at TIMESTAMPTZ DEFAULT now()
+        );
+      `);
+
       // MOBS
       await client.query(`
         CREATE TABLE IF NOT EXISTS mobs (

@@ -5,6 +5,7 @@ import { pool } from "./db.js";
 import { migrate } from "./migrate.js";
 import { registerDungeon } from "./dungeon.js";
 import { registerTrade } from "./trade.js";
+import { registerEventRewards } from "./event_rewards.js";
 
 // --------------------------------------
 // Bootstrap HTTP (health) + migrations
@@ -2492,6 +2493,14 @@ registerTrade(bot, {
   escapeHtml,
   genCode,
   STATES,
+});
+
+registerEventRewards(bot, {
+  pool,
+  getPlayer,
+  awardItem,
+  sendCard,
+  escapeHtml,
 });
 
 // Launch bot
