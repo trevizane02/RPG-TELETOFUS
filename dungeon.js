@@ -172,6 +172,7 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
       locked: false,
       bestDrop: null,
       consumablePrompts: new Map(),
+      resolvingTurn: false,
     };
     session.memberData.set(String(ctx.from.id), { name: base.player.name || "Aventureiro", ready: true, hp: base.player.hp, maxHp: stats.total_hp, alive: true, dmg: 0, contrib: 0 });
     sessions.set(code, session);
@@ -322,6 +323,7 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
 
   async function startNewTurn(session) {
     clearTurnTimer(session);
+    session.resolvingTurn = false;
     session.playerActions = new Map();
     session.lastEvents = session.lastEvents || [];
     for (const uid of session.members) {
@@ -336,7 +338,7 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
 
   async function autoResolveTurn(session) {
     const floor = session.floors[session.currentFloor];
-    if (!floor || session.state !== "running") return;
+    if (!floor || session.state !== "running" || session.resolvingTurn) return;
     for (const uid of session.members) {
       const member = session.memberData.get(uid);
       if (!member?.alive) continue;
@@ -364,6 +366,10 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
 
   function randInt(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
+  }
+
+  function waitMs(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   async function defeatRoomMob(session, floorIndex) {
@@ -510,6 +516,8 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
   }
 
   async function resolveCombatTurn(session) {
+    if (session.resolvingTurn) return;
+    session.resolvingTurn = true;
     const floor = session.floors[session.currentFloor];
     if (!floor || session.state !== "running") return;
     clearTurnTimer(session);
@@ -574,6 +582,7 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
 
     if (mob.hp <= 0) {
       await defeatRoomMob(session, session.currentFloor);
+      await waitMs(1200);
       session.currentFloor += 1;
       if (session.currentFloor >= session.floors.length) {
         await finishDungeon(session);
@@ -583,6 +592,7 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
     } else {
       await startNewTurn(session);
     }
+    if (session.state === "running") session.resolvingTurn = false;
   }
 
   async function startSession(ctx, code) {
@@ -831,7 +841,7 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
       session.playerActions.set(uid, { action: "defend", icon: ACTION_ICONS.defend, defBonus: Math.floor(shield.rolled_def * 0.5) });
       await ctx.answerCbQuery("🛡️ Defendendo! (+50% DEF)").catch(() => {});
       await updateDungeonScreen(session);
-      if (session.playerActions.size >= aliveCount(session)) await resolveCombatTurn(session);
+      if (session.playerActions.size >= aliveCount(session) && !session.resolvingTurn) await resolveCombatTurn(session);
       return;
     }
 
@@ -839,7 +849,7 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
     await ctx.answerCbQuery("Ação registrada").catch(() => {});
     await updateDungeonScreen(session);
 
-    if (session.playerActions.size >= aliveCount(session)) {
+    if (session.playerActions.size >= aliveCount(session) && !session.resolvingTurn) {
       await resolveCombatTurn(session);
     }
   });
@@ -862,7 +872,7 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
     session.playerActions.set(uid, { action: "cons", icon: ACTION_ICONS.cons, itemKey });
     await ctx.answerCbQuery("Consumido").catch(() => {});
     await updateDungeonScreen(session);
-    if (session.playerActions.size >= aliveCount(session)) {
+    if (session.playerActions.size >= aliveCount(session) && !session.resolvingTurn) {
       await resolveCombatTurn(session);
     }
   });
