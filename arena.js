@@ -297,13 +297,17 @@ export function registerArena(bot, deps) {
     await bot.telegram.sendMessage(userId, caption, opts);
   }
 
-  bot.action("arena_menu", async (ctx) => {
+  async function showArenaMenu(ctx) {
     await ctx.reply("🏟️ Arena", { reply_markup: arenaMenuKeyboard() });
     if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
-  });
+  }
+
+  bot.action("arena_menu", showArenaMenu);
+  // Alias para callbacks/menus antigos
+  bot.action("arena", showArenaMenu);
 
   bot.command("arena", async (ctx) => {
-    await ctx.reply("🏟️ Arena", { reply_markup: arenaMenuKeyboard() });
+    await showArenaMenu(ctx);
   });
 
   bot.action("arena_queue", async (ctx) => {
