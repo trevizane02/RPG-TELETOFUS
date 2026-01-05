@@ -196,6 +196,8 @@ export async function migrate() {
           class TEXT NOT NULL DEFAULT 'guerreiro',
           trophies INT NOT NULL DEFAULT 0,
           arena_coins INT NOT NULL DEFAULT 0,
+          arena_wins INT NOT NULL DEFAULT 0,
+          arena_losses INT NOT NULL DEFAULT 0,
           base_atk INT NOT NULL DEFAULT 5,
           base_def INT NOT NULL DEFAULT 2,
           base_crit INT NOT NULL DEFAULT 5,
@@ -292,6 +294,12 @@ export async function migrate() {
           IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='players' AND column_name='arena_coins') THEN
             ALTER TABLE players ADD COLUMN arena_coins INT NOT NULL DEFAULT 0;
           END IF;
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='players' AND column_name='arena_wins') THEN
+            ALTER TABLE players ADD COLUMN arena_wins INT NOT NULL DEFAULT 0;
+          END IF;
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='players' AND column_name='arena_losses') THEN
+            ALTER TABLE players ADD COLUMN arena_losses INT NOT NULL DEFAULT 0;
+          END IF;
           IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='players' AND column_name='trade_code') THEN
             ALTER TABLE players ADD COLUMN trade_code TEXT;
           END IF;
@@ -323,6 +331,21 @@ export async function migrate() {
           updated_at TIMESTAMPTZ DEFAULT now()
         );
       `);
+
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS arena_chests (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          player_id UUID REFERENCES players(id) ON DELETE CASCADE,
+          slot INT NOT NULL,
+          rarity TEXT NOT NULL,
+          state TEXT NOT NULL DEFAULT 'locked', -- locked, opened
+          unlock_at TIMESTAMPTZ,
+          opened_at TIMESTAMPTZ,
+          rewards JSONB,
+          created_at TIMESTAMPTZ DEFAULT now()
+        );
+      `);
+      await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS arena_chests_player_slot_open ON arena_chests(player_id, slot) WHERE opened_at IS NULL`);
 
       await client.query(`
         UPDATE players
@@ -523,6 +546,9 @@ export async function migrate() {
           IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='inventory' AND column_name='slot') THEN
             ALTER TABLE inventory ADD COLUMN slot TEXT;
           END IF;
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='inventory' AND column_name='created_at') THEN
+            ALTER TABLE inventory ADD COLUMN created_at TIMESTAMPTZ DEFAULT now();
+          END IF;
           -- backfill item_key from legacy item_id if exists
           IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='inventory' AND column_name='item_id') THEN
             UPDATE inventory inv
@@ -569,7 +595,7 @@ export async function migrate() {
       await client.query(`
         WITH cte AS (
           SELECT inv.id, inv.player_id, inv.item_key,
-                 ROW_NUMBER() OVER (PARTITION BY inv.player_id, inv.item_key ORDER BY inv.created_at, inv.id) AS rn,
+                 ROW_NUMBER() OVER (PARTITION BY inv.player_id, inv.item_key ORDER BY COALESCE(inv.created_at, now()), inv.id) AS rn,
                  SUM(inv.qty) OVER (PARTITION BY inv.player_id, inv.item_key) AS total
           FROM inventory inv
           JOIN items i ON i.key = inv.item_key
@@ -585,7 +611,7 @@ export async function migrate() {
       await client.query(`
         WITH cte AS (
           SELECT inv.id,
-                 ROW_NUMBER() OVER (PARTITION BY inv.player_id, inv.item_key ORDER BY inv.created_at, inv.id) AS rn
+                 ROW_NUMBER() OVER (PARTITION BY inv.player_id, inv.item_key ORDER BY COALESCE(inv.created_at, now()), inv.id) AS rn
           FROM inventory inv
           JOIN items i ON i.key = inv.item_key
           WHERE i.slot = 'consumable'
