@@ -55,6 +55,7 @@ export function registerArena(bot, deps) {
   const arenaFights = new Map(); // userId -> fight data
   const exitPrompts = new Map(); // userId -> expires timestamp
   const rankImages = new Map(); // key -> file_id or null
+  const coverImages = new Map(); // key -> file_id or null
   const itemCache = new Map(); // item_key -> row
 
   function isVip(player) {
@@ -284,6 +285,21 @@ export function registerArena(bot, deps) {
     }
   }
 
+  async function getCoverImage(key) {
+    if (!key) return null;
+    if (coverImages.has(key)) return coverImages.get(key);
+    try {
+      const res = await pool.query("SELECT file_id FROM event_images WHERE event_key = $1", [key]);
+      const fileId = res.rows[0]?.file_id || null;
+      coverImages.set(key, fileId);
+      return fileId;
+    } catch (e) {
+      console.error("arena cover image load", e.message);
+      coverImages.set(key, null);
+      return null;
+    }
+  }
+
   async function sendToUser(userId, { fileId, caption, keyboard }) {
     const opts = { reply_markup: keyboard, parse_mode: "Markdown" };
     if (fileId) {
@@ -298,7 +314,15 @@ export function registerArena(bot, deps) {
   }
 
   async function showArenaMenu(ctx) {
-    await ctx.reply("🏟️ Arena", { reply_markup: arenaMenuKeyboard() });
+    const userId = String(ctx.from.id);
+    const player = await getPlayer(userId, ctx.from.first_name);
+    const fileId = await getCoverImage("arena_cover");
+    const caption =
+      `🏟️ Bem-vindo à Arena!\n` +
+      `🏆 Seus troféus: ${player.trophies || 0}\n` +
+      `🎖️ Arena coins: ${player.arena_coins || 0}\n` +
+      `⚔️ Enfileire para duelar e ganhar troféus, coins e tesouros.`;
+    await sendCard(ctx, { fileId, caption, keyboard: arenaMenuKeyboard() });
     if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
   }
 
@@ -606,7 +630,16 @@ export function registerArena(bot, deps) {
   bot.action("arena_ranks_menu", async (ctx) => {
     const keyboard = ARENA_RANKS.map((r) => [Markup.button.callback(`${r.name} (${r.min}-${r.max === 999999 ? "∞" : r.max})`, `arena_rank_${r.key}`)]);
     keyboard.push([Markup.button.callback("🏟️ Arena", "arena_menu"), Markup.button.callback("🏠 Menu", "menu")]);
-    await ctx.reply("📊 Ranks da Arena", { reply_markup: Markup.inlineKeyboard(keyboard).reply_markup });
+    const fileId = await getCoverImage("arena_ranks_cover");
+    const caption =
+      `📊 Ranks da Arena\n` +
+      `• Sangue-Novo (0-199)\n` +
+      `• Desafiador (200-599)\n` +
+      `• Veterano (600-1199)\n` +
+      `• Campeão (1200-1999)\n` +
+      `• Lenda (2000+)\n` +
+      `▲ Suba com troféus; derrotas retiram troféus.`;
+    await sendCard(ctx, { fileId, caption, keyboard: Markup.inlineKeyboard(keyboard).reply_markup });
     if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
   });
 
@@ -688,7 +721,14 @@ export function registerArena(bot, deps) {
     const slotsUnlocked = unlockedSlots(player);
     const chests = await getChests(player.id);
 
-    const lines = [];
+    const lines = [
+      "💰 Tesouros da Arena",
+      "- Ganhe baús ao vencer.",
+      "- Cada slot tem um timer; abra quando estiver pronto.",
+      "- Sem espaço? vire VIP e ganhe espaços extras!",
+      "- Recompensas: poções, chaves, gold/coins (varia pela raridade).",
+      "",
+    ];
     const keyboard = [];
     for (let i = 0; i < ARENA_MAX_SLOTS; i++) {
       const chest = chests.find((c) => c.slot === i && c.state !== "opened");
@@ -707,7 +747,8 @@ export function registerArena(bot, deps) {
 
     keyboard.push([Markup.button.callback("🏟️ Arena", "arena_menu"), Markup.button.callback("🏠 Menu", "menu")]);
     await sendCard(ctx, {
-      caption: `💰 Tesouros da Arena\n${lines.join("\n") || "Sem slots."}`,
+      fileId: await getCoverImage("arena_chests_cover"),
+      caption: `${lines.join("\n") || "Sem slots."}`,
       keyboard,
     });
     if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
