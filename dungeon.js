@@ -171,6 +171,7 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
       mapImage: null,
       locked: false,
       bestDrop: null,
+      consumablePrompts: new Map(),
     };
     session.memberData.set(String(ctx.from.id), { name: base.player.name || "Aventureiro", ready: true, hp: base.player.hp, maxHp: stats.total_hp, alive: true, dmg: 0, contrib: 0 });
     sessions.set(code, session);
@@ -275,6 +276,11 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
     }
     lines.push("");
     lines.push(`⏱️ Aguardando ações... (${remaining}s)`);
+    if (session.lastEvents?.length) {
+      lines.push("");
+      lines.push("⚡ Resolução anterior:");
+      session.lastEvents.forEach((ev) => lines.push(ev));
+    }
 
     const keyboard = [
       [
@@ -303,9 +309,24 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
     }
   }
 
+  async function deleteConsumablePrompt(session, uid) {
+    const msgId = session.consumablePrompts?.get(uid);
+    if (!msgId) return;
+    try {
+      await bot.telegram.deleteMessage(uid, msgId);
+    } catch (e) {
+      // ignore
+    }
+    session.consumablePrompts.delete(uid);
+  }
+
   async function startNewTurn(session) {
     clearTurnTimer(session);
     session.playerActions = new Map();
+    session.lastEvents = session.lastEvents || [];
+    for (const uid of session.members) {
+      await deleteConsumablePrompt(session, uid);
+    }
     session.turnStartTime = Date.now();
     session.turnTimer = setTimeout(async () => {
       await autoResolveTurn(session);
@@ -450,6 +471,9 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
 
   async function finishDungeon(session) {
     clearTurnTimer(session);
+    for (const uid of session.members) {
+      await deleteConsumablePrompt(session, uid);
+    }
     session.state = "finished";
     const summary = [];
     for (const uid of session.members) {
@@ -499,6 +523,7 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
 
     let totalDmg = 0;
     const defenders = [];
+    const turnEvents = [];
     for (const uid of aliveMembers) {
       const action = session.playerActions.get(uid) || { action: "attack" };
       const player = await getPlayer(uid);
@@ -511,10 +536,15 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
         md.contrib = (md.contrib || 0) + dmg;
         session.memberData.set(uid, md);
         session.contribution.set(uid, (session.contribution.get(uid) || 0) + dmg);
+        turnEvents.push(`⚔️ ${md.name} causa ${dmg} em ${mob.name}`);
       } else if (action.action === "defend") {
         defenders.push({ uid, defBonus: action.defBonus || 0 });
+        const md = session.memberData.get(uid);
+        turnEvents.push(`🛡️ ${md.name} defende (+${action.defBonus || 0} DEF)`);
       } else if (action.action === "cons" && action.itemKey) {
         await useConsumable(player, action.itemKey);
+        const md = session.memberData.get(uid);
+        turnEvents.push(`🧪 ${md.name} usa consumível`);
       }
     }
 
@@ -536,9 +566,10 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
       if (newHp <= 0) md.alive = false;
       session.memberData.set(targetId, md);
       if (mitigated > 0) session.contribution.set(targetId, (session.contribution.get(targetId) || 0) + mitigated);
-      await bot.telegram.sendMessage(targetId, `💥 ${mob.name} causou ${dmg} de dano em você. HP: ${newHp}`).catch(() => {});
+      turnEvents.push(`💥 ${mob.name} causa ${dmg} em ${md.name}`);
     }
 
+    session.lastEvents = turnEvents.slice(-6);
     session.playerActions.clear();
 
     if (mob.hp <= 0) {
@@ -547,7 +578,6 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
       if (session.currentFloor >= session.floors.length) {
         await finishDungeon(session);
       } else {
-        await bot.telegram.sendMessage([...session.members][0], `${mob.name} derrotado!`).catch(() => {});
         await startNewTurn(session);
       }
     } else {
@@ -689,7 +719,7 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
         parse_mode: "HTML",
         reply_markup: Markup.inlineKeyboard([
           [Markup.button.callback("✅ Sim, sair", `d_exit_yes:${code}`), Markup.button.callback("❌ Cancelar", "d_exit_no")],
-        ]),
+        ]).reply_markup,
       }
     );
   });
@@ -774,7 +804,9 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
         return;
       }
       const kb = items.rows.map((it) => [Markup.button.callback(`${it.name} (${it.qty})`, `d_use:${code}:${it.item_key}`)]);
-      await ctx.reply("🧪 Escolha um consumível (gasta o turno):", { reply_markup: Markup.inlineKeyboard(kb).reply_markup });
+      await deleteConsumablePrompt(session, uid);
+      const sent = await ctx.reply("🧪 Escolha um consumível (gasta o turno):", { reply_markup: Markup.inlineKeyboard(kb).reply_markup });
+      if (sent?.message_id) session.consumablePrompts.set(uid, sent.message_id);
       await ctx.answerCbQuery().catch(() => {});
       return;
     }
@@ -826,6 +858,7 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
       await ctx.answerCbQuery(result.message || "Não foi possível usar.").catch(() => {});
       return;
     }
+    await deleteConsumablePrompt(session, uid);
     session.playerActions.set(uid, { action: "cons", icon: ACTION_ICONS.cons, itemKey });
     await ctx.answerCbQuery("Consumido").catch(() => {});
     await updateDungeonScreen(session);
