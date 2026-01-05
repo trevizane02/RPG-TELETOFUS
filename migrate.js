@@ -557,6 +557,37 @@ export async function migrate() {
       // Drop old unique index if exists
       await client.query(`DROP INDEX IF EXISTS inventory_player_item_key`);
       
+      // Dedup consumables into single stack before unique index
+      await client.query(`
+        WITH cte AS (
+          SELECT player_id, item_key, MIN(id) AS keep_id, SUM(qty) AS total
+          FROM inventory
+          WHERE slot = 'consumable'
+          GROUP BY player_id, item_key
+          HAVING COUNT(*) > 1
+        )
+        UPDATE inventory inv
+        SET qty = c.total
+        FROM cte c
+        WHERE inv.id = c.keep_id;
+      `);
+
+      await client.query(`
+        WITH cte AS (
+          SELECT player_id, item_key, MIN(id) AS keep_id
+          FROM inventory
+          WHERE slot = 'consumable'
+          GROUP BY player_id, item_key
+          HAVING COUNT(*) > 1
+        )
+        DELETE FROM inventory inv
+        USING cte c
+        WHERE inv.slot = 'consumable'
+          AND inv.player_id = c.player_id
+          AND inv.item_key = c.item_key
+          AND inv.id <> c.keep_id;
+      `);
+      
       // Create conditional unique index ONLY for consumables (allows stacking)
       await client.query(`
         CREATE UNIQUE INDEX IF NOT EXISTS inventory_consumable_stack 
