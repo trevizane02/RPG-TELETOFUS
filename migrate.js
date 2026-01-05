@@ -838,7 +838,6 @@ export async function migrate() {
         { item_key: 'leather_armor', currency: 'gold', buy_price: 120, sell_price: 35 },
         { item_key: 'novice_rod', currency: 'gold', buy_price: 90, sell_price: 28 },
         { item_key: 'hunting_bow', currency: 'gold', buy_price: 110, sell_price: 32 },
-        { item_key: 'dungeon_key', currency: 'gold', buy_price: 2500, sell_price: null },
         
         // VIP/Premium (Tofus - moeda premium)
         { item_key: 'amulet_health', currency: 'tofus', buy_price: 100, sell_price: null },

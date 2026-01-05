@@ -18,7 +18,6 @@ Fonte: seeds em `migrate.js` (`SHOP_SEEDS`) e configuração de lojas (`SHOP_DEF
   - atk_tonic — gold — buy 150 — sell 40
   - def_tonic — gold — buy 150 — sell 40
   - crit_tonic — gold — buy 180 — sell 50
-  - dungeon_key — gold — buy 2500 — sell null
 
 - Consumíveis (Arena Coins)
   - health_potion — arena_coins — buy 100 — sell null
