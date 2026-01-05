@@ -99,7 +99,6 @@ export function registerEventRewards(bot, deps) {
       try {
         const keyboard = Markup.inlineKeyboard([
           [Markup.button.callback(`🎉 Resgatado por ${winner}`, "noop_event_claimed")],
-          [Markup.button.callback("🏠 Menu", "menu")],
         ]).reply_markup;
         await bot.telegram.editMessageCaption(
           reward.chat_id,
