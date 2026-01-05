@@ -4,6 +4,7 @@ export function registerTrade(bot, deps) {
   const { pool, getPlayer, getItemQty, hasItemQty, sendCard, escapeHtml, genCode, STATES } = deps;
 
   const tradeSessions = new Map(); // code -> trade session
+  const pendingQty = new Map(); // userId -> { itemKey, page }
   const pendingTradeJoin = new Set(); // userIds aguardando código via prompt
 
   function formatTradeItemLabel(item) {
@@ -304,6 +305,7 @@ export function registerTrade(bot, deps) {
         Markup.button.callback("+10", `trade_offer_set_${itemKey}_10`),
         Markup.button.callback(`Máx (${qty})`, `trade_offer_set_${itemKey}_${qty}`),
       ],
+      [Markup.button.callback("✏️ Digitar", `trade_offer_custom_${itemKey}_${page}`)],
       [Markup.button.callback("⬅️ Voltar", `trade_offer_page_${page}`)],
     ];
     await sendCard(ctx, {
@@ -339,6 +341,65 @@ export function registerTrade(bot, deps) {
     found.session.offers[side] = { item_key: itemKey, qty };
     found.session.confirmed = { owner: false, guest: false };
     await renderTrade(ctx, found.session);
+  });
+
+  bot.action(/trade_offer_custom_(.+)_(\d+)/, async (ctx) => {
+    const itemKey = ctx.match[1];
+    const page = ctx.match[2];
+    const userId = String(ctx.from.id);
+    const found = findTradeByUser(userId);
+    if (!found) return ctx.answerCbQuery("Sem troca");
+    if (found.session.expires < Date.now()) {
+      tradeSessions.delete(found.code);
+      await ctx.answerCbQuery("Expirou");
+      return ctx.reply("Troca expirada.", Markup.inlineKeyboard([[Markup.button.callback("🏠 Menu", "menu")]]));
+    }
+    pendingQty.set(userId, { itemKey, page });
+    await ctx.answerCbQuery();
+    await ctx.reply(`Digite a quantidade para ${itemKey}:`, { reply_markup: { force_reply: true } });
+  });
+
+  bot.on("text", async (ctx, next) => {
+    const userId = String(ctx.from.id);
+    const pending = pendingQty.get(userId);
+    if (!pending) return next();
+
+    const found = findTradeByUser(userId);
+    if (!found) {
+      pendingQty.delete(userId);
+      return next();
+    }
+    if (found.session.expires < Date.now()) {
+      tradeSessions.delete(found.code);
+      pendingQty.delete(userId);
+      await ctx.reply("Troca expirada.", Markup.inlineKeyboard([[Markup.button.callback("🏠 Menu", "menu")]]));
+      return;
+    }
+
+    const qty = parseInt(ctx.message.text.replace(/\D/g, ""), 10);
+    if (!qty || qty < 1) {
+      await ctx.reply("Quantidade inválida. Digite um número positivo.");
+      return;
+    }
+
+    const player = await getPlayer(userId, ctx.from.first_name);
+    let stock;
+    if (pending.itemKey === "__gold") stock = player.gold || 0;
+    else if (pending.itemKey === "__tofus") stock = player.tofus || 0;
+    else stock = await getItemQty(player.id, pending.itemKey);
+
+    if (stock < qty) {
+      await ctx.reply("Quantidade maior que o estoque.");
+      return;
+    }
+
+    const side = found.session.ownerId === userId ? "owner" : "guest";
+    found.session.offers[side] = { item_key: pending.itemKey, qty };
+    found.session.confirmed = { owner: false, guest: false };
+    pendingQty.delete(userId);
+
+    await ctx.reply("Oferta salva.");
+    return renderTrade(ctx, found.session);
   });
 
   bot.action("trade_refresh", async (ctx) => {
