@@ -568,33 +568,32 @@ export async function migrate() {
 
       await client.query(`
         WITH cte AS (
-          SELECT inv.player_id, inv.item_key, MIN(inv.id) AS keep_id, SUM(inv.qty) AS total
+          SELECT inv.id, inv.player_id, inv.item_key,
+                 ROW_NUMBER() OVER (PARTITION BY inv.player_id, inv.item_key ORDER BY inv.created_at, inv.id) AS rn,
+                 SUM(inv.qty) OVER (PARTITION BY inv.player_id, inv.item_key) AS total
           FROM inventory inv
           JOIN items i ON i.key = inv.item_key
           WHERE i.slot = 'consumable'
-          GROUP BY inv.player_id, inv.item_key
-          HAVING COUNT(*) > 1
         )
         UPDATE inventory inv
         SET qty = c.total
         FROM cte c
-        WHERE inv.id = c.keep_id;
+        WHERE inv.id = c.id
+          AND c.rn = 1;
       `);
 
       await client.query(`
         WITH cte AS (
-          SELECT inv.player_id, inv.item_key, MIN(inv.id) AS keep_id
+          SELECT inv.id,
+                 ROW_NUMBER() OVER (PARTITION BY inv.player_id, inv.item_key ORDER BY inv.created_at, inv.id) AS rn
           FROM inventory inv
           JOIN items i ON i.key = inv.item_key
           WHERE i.slot = 'consumable'
-          GROUP BY inv.player_id, inv.item_key
-          HAVING COUNT(*) > 1
         )
         DELETE FROM inventory inv
         USING cte c
-        WHERE inv.player_id = c.player_id
-          AND inv.item_key = c.item_key
-          AND inv.id <> c.keep_id;
+        WHERE inv.id = c.id
+          AND c.rn > 1;
       `);
       
       // Create conditional unique index ONLY for consumables (allows stacking)
