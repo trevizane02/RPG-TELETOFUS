@@ -57,7 +57,7 @@ const CLASS_WEAPONS = {
 const SHOP_DEFS = {
   vila: {
     name: "Loja da Vila",
-    items: ["health_potion", "energy_potion", "atk_tonic", "def_tonic", "crit_tonic", "novice_rod", "hunting_bow", "short_sword", "wooden_shield", "leather_armor"],
+    items: ["health_potion", "energy_potion", "atk_tonic", "def_tonic", "crit_tonic", "novice_rod", "hunting_bow", "short_sword", "wooden_shield", "leather_armor", "dungeon_key"],
   },
   matadores: {
     name: "Loja dos Matadores",
