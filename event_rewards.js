@@ -77,7 +77,15 @@ export function registerEventRewards(bot, deps) {
 
     const reward = claimRes.rows[0];
     const item = await getItemInfo(reward.item_key);
-    await awardItem(player.id, reward.item_key, reward.qty || 1);
+    if (!item) {
+      if (ctx.callbackQuery) await ctx.answerCbQuery("Item inválido");
+      return;
+    }
+    const qty = reward.qty && reward.qty > 0 ? reward.qty : 1;
+    for (let i = 0; i < qty; i++) {
+      const res = await awardItem(player.id, item);
+      if (!res?.success) break;
+    }
     if (ctx.callbackQuery) await ctx.answerCbQuery("Você pegou!");
     await ctx.reply(`🎉 Você pegou ${item?.name || reward.item_key}!`);
 
@@ -89,6 +97,10 @@ export function registerEventRewards(bot, deps) {
         `Prêmio: <b>${escapeHtml(item?.name || reward.item_key)}</b>\n` +
         `Vencedor: ${winner}`;
       try {
+        const keyboard = Markup.inlineKeyboard([
+          [Markup.button.callback(`🎉 Resgatado por ${winner}`, "noop_event_claimed")],
+          [Markup.button.callback("🏠 Menu", "menu")],
+        ]).reply_markup;
         await bot.telegram.editMessageCaption(
           reward.chat_id,
           Number(reward.message_id),
@@ -96,7 +108,7 @@ export function registerEventRewards(bot, deps) {
           caption,
           {
             parse_mode: "HTML",
-            reply_markup: Markup.inlineKeyboard([[Markup.button.callback("🏠 Menu", "menu")]]).reply_markup,
+            reply_markup: keyboard,
           }
         );
       } catch (e) {
