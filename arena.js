@@ -526,6 +526,8 @@ export function registerArena(bot, deps) {
   }
 
   async function finishFight(winnerId, loserId, { surrender = false } = {}) {
+    // evita dupla finalização
+    if (!arenaFights.has(winnerId) || !arenaFights.has(loserId)) return;
     const winner = await getPlayer(winnerId);
     const loser = await getPlayer(loserId);
     const { gain: trophyGain, loss: trophyLoss } = calcTrophyDelta(winner.trophies || 0, loser.trophies || 0, { surrender });
