@@ -172,11 +172,12 @@ export function registerVip({ bot, app, deps }) {
 
   // --------- WEBHOOK MP (Express) ---------
   if (app) {
-    app.post("/payments/mp/webhook", async (req, res) => {
+    async function handleWebhook(req, res) {
       try {
         const { type, data, action } = req.body || {};
         const paymentId = req.query.id || data?.id || req.body?.id;
         if (!paymentId) {
+          console.warn("MP webhook sem paymentId", { query: req.query, body: req.body });
           return res.sendStatus(200);
         }
         const payment = await fetchPayment(paymentId);
@@ -230,6 +231,10 @@ export function registerVip({ bot, app, deps }) {
         }
         return res.sendStatus(500);
       }
-    });
+    }
+
+    // Mercado Pago pode enviar POST ou GET; tratamos ambos para robustez.
+    app.post("/payments/mp/webhook", handleWebhook);
+    app.get("/payments/mp/webhook", handleWebhook);
   }
 }
