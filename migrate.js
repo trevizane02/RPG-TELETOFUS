@@ -315,6 +315,9 @@ export async function migrate() {
           IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='players' AND column_name='rename_free_used') THEN
             ALTER TABLE players ADD COLUMN rename_free_used BOOLEAN NOT NULL DEFAULT false;
           END IF;
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='players' AND column_name='vip_chest_opened_at') THEN
+            ALTER TABLE players ADD COLUMN vip_chest_opened_at TIMESTAMPTZ;
+          END IF;
           IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='items' AND column_name='boss_only') THEN
             ALTER TABLE items ADD COLUMN boss_only BOOLEAN NOT NULL DEFAULT false;
           END IF;

@@ -6,10 +6,11 @@ const EVENT_IMG_KEYS = {
   main: "vip_cover",
   tofus: "vip_tofus_cover",
   buy: "vip_buy_cover",
+  chest: "vip_chest_cover",
 };
 
 export function registerVip({ bot, app, deps }) {
-  const { pool, getPlayer, setPlayerState, sendCard, STATES } = deps;
+  const { pool, getPlayer, setPlayerState, sendCard, awardItem, STATES } = deps;
   const imageCache = new Map(); // key -> file_id|null
 
   async function getEventImage(key) {
@@ -35,18 +36,91 @@ export function registerVip({ bot, app, deps }) {
     ];
   }
 
+  function isVip(player) {
+    return player.vip_until && new Date(player.vip_until) > new Date();
+  }
+
+  function vipChestCooldown(player) {
+    const last = player.vip_chest_opened_at ? new Date(player.vip_chest_opened_at) : null;
+    if (!last) return { ready: true, remainingMs: 0 };
+    const next = new Date(last.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const diff = next - new Date();
+    return { ready: diff <= 0, remainingMs: diff };
+  }
+
+  function formatRemaining(ms) {
+    const totalMin = Math.ceil(ms / 60000);
+    const days = Math.floor(totalMin / 1440);
+    const hours = Math.floor((totalMin % 1440) / 60);
+    const mins = totalMin % 60;
+    if (days > 0) return `${days}d ${hours}h`;
+    if (hours > 0) return `${hours}h ${mins}m`;
+    return `${mins}m`;
+  }
+
+  async function pickVipChestReward(playerId) {
+    const rewards = [
+      { type: "item", key: "energy_potion", qty: 15, label: "15x Poções de Energia", weight: 40 },
+      { type: "item", key: "health_potion", qty: 20, label: "20x Poções de Vida", weight: 40 },
+      { type: "item", key: "dungeon_key", qty: 4, label: "4x Chaves de Masmorra", weight: 15 },
+      { type: "item", key: "bone_key", qty: 1, label: "1x Chave de Ossos", weight: 2 },
+      { type: "tofu", qty: 1, label: "1x Tofu", weight: 3 },
+    ];
+    const total = rewards.reduce((acc, r) => acc + (r.weight || 1), 0);
+    let roll = Math.random() * total;
+    let chosen = rewards[0];
+    for (const r of rewards) {
+      roll -= r.weight || 1;
+      if (roll <= 0) {
+        chosen = r;
+        break;
+      }
+    }
+    // Valida item bone_key existente; se não, cai para dungeon_key
+    if (chosen.type === "item") {
+      const check = await pool.query("SELECT key FROM items WHERE key = $1", [chosen.key]);
+      if (check.rows.length === 0) {
+        if (chosen.key === "bone_key") {
+          chosen = { type: "item", key: "dungeon_key", qty: 2, label: "2x Chaves de Masmorra", weight: 2 };
+        }
+      }
+    }
+    if (chosen.type === "item") {
+      const itemRow = await pool.query("SELECT * FROM items WHERE key = $1", [chosen.key]);
+      const item = itemRow.rows[0];
+      if (!item) {
+        return { ok: false, message: "Recompensa indisponível." };
+      }
+      for (let i = 0; i < chosen.qty; i++) {
+        const res = await awardItem(playerId, item);
+        if (!res?.success) {
+          return { ok: true, message: `Inventário cheio. Recompensa convertida em 10 arena coins.`, fallback: true };
+        }
+      }
+      return { ok: true, message: chosen.label };
+    }
+    if (chosen.type === "tofu") {
+      await pool.query("UPDATE players SET tofus = tofus + $1 WHERE id = $2", [chosen.qty, playerId]);
+      return { ok: true, message: chosen.label };
+    }
+    return { ok: false, message: "Recompensa inválida." };
+  }
+
   // --------- VIP SCREENS ---------
   async function showVipMenu(ctx) {
     const player = await getPlayer(String(ctx.from.id), ctx.from.first_name);
     await setPlayerState(player.id, STATES.MENU);
-    const isVip = player.vip_until && new Date(player.vip_until) > new Date();
-    const expires = isVip ? formatDate(player.vip_until) : "—";
+    const vipActive = isVip(player);
+    const expires = vipActive ? formatDate(player.vip_until) : "—";
+    const chest = vipChestCooldown(player);
+    const chestLine = vipActive ? (chest.ready ? "🎁 Baú VIP: disponível!" : `🎁 Baú VIP: em ${formatRemaining(chest.remainingMs)}`) : "🎁 Baú VIP: exclusivo para VIP";
 
     const caption =
       `👑 VIP PREMIUM\n` +
-      `Status: ${isVip ? "✅ Ativo" : "❌ Não VIP"}\n` +
+      `Status: ${vipActive ? "✅ Ativo" : "❌ Não VIP"}\n` +
       `Válido até: ${expires}\n` +
       `Tofus: ${player.tofus || 0}\n\n` +
+      `${chestLine}\n\n` +
       `Benefícios:\n` +
       `🔋 Energia máx 40\n` +
       `🎒 Inventário 30 slots\n` +
@@ -56,6 +130,7 @@ export function registerVip({ bot, app, deps }) {
     const keyboard = [
       [Markup.button.callback("💰 Comprar Tofus", "vip_tofus")],
       [Markup.button.callback(`⭐ Assinar VIP (${VIP_COST} Tofus)`, "vip_buy")],
+      [Markup.button.callback("🎁 Baú VIP semanal", "vip_chest")],
       ...buildBackMenu(),
     ];
 
@@ -115,13 +190,13 @@ export function registerVip({ bot, app, deps }) {
   // Comprar VIP
   bot.action("vip_buy", async (ctx) => {
     const player = await getPlayer(String(ctx.from.id), ctx.from.first_name);
-    const isVip = player.vip_until && new Date(player.vip_until) > new Date();
-    const expires = isVip ? formatDate(player.vip_until) : "—";
+    const active = isVip(player);
+    const expires = active ? formatDate(player.vip_until) : "—";
     const caption =
       `⭐ VIP 30 dias\n` +
       `Custo: ${VIP_COST} Tofus\n` +
       `Seu saldo: ${player.tofus || 0} Tofus\n` +
-      `Status atual: ${isVip ? `Ativo (até ${expires})` : "Não VIP"}`;
+      `Status atual: ${active ? `Ativo (até ${expires})` : "Não VIP"}`;
     const keyboard = [
       [Markup.button.callback(`✅ Confirmar (-${VIP_COST} Tofus)`, "vip_buy_confirm")],
       [Markup.button.callback("⬅️ Voltar", "vip_menu"), Markup.button.callback("🏠 Menu", "menu")],
@@ -170,6 +245,64 @@ export function registerVip({ bot, app, deps }) {
         keyboard: [[Markup.button.callback("⬅️ Voltar", "vip_menu"), Markup.button.callback("🏠 Menu", "menu")]],
       });
     }
+    if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
+  });
+
+  // Baú VIP semanal
+  bot.action("vip_chest", async (ctx) => {
+    const player = await getPlayer(String(ctx.from.id), ctx.from.first_name);
+    await setPlayerState(player.id, STATES.MENU);
+    const active = isVip(player);
+    const chest = vipChestCooldown(player);
+    const caption =
+      `🎁 Baú VIP Semanal\n` +
+      `Abra uma vez a cada 7 dias e receba uma recompensa VIP.\n\n` +
+      `Recompensas possíveis:\n` +
+      `• 15x Poções de Energia\n` +
+      `• 20x Poções de Vida\n` +
+      `• 4x Chaves de Masmorra\n` +
+      `• 1x Tofu (raro)\n` +
+      `• 1x Chave de Ossos (muito rara)\n\n` +
+      `Status: ${active ? (chest.ready ? "Disponível" : `Aguarde ${formatRemaining(chest.remainingMs)}`) : "Exclusivo para VIP"}`;
+
+    const keyboard = [];
+    if (active && chest.ready) {
+      keyboard.push([Markup.button.callback("🎁 Abrir agora", "vip_chest_open")]);
+    }
+    keyboard.push([Markup.button.callback("⬅️ Voltar", "vip_menu"), Markup.button.callback("🏠 Menu", "menu")]);
+
+    await sendCard(ctx, { fileId: await getEventImage(EVENT_IMG_KEYS.chest), caption, keyboard });
+    if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
+  });
+
+  bot.action("vip_chest_open", async (ctx) => {
+    const player = await getPlayer(String(ctx.from.id), ctx.from.first_name);
+    const active = isVip(player);
+    if (!active) {
+      await sendCard(ctx, {
+        caption: "🚫 Apenas VIP pode abrir o baú semanal.",
+        keyboard: [[Markup.button.callback("⭐ Assinar VIP", "vip_buy")], [Markup.button.callback("🏠 Menu", "menu")]],
+      });
+      if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
+      return;
+    }
+    const chest = vipChestCooldown(player);
+    if (!chest.ready) {
+      await sendCard(ctx, {
+        caption: `⏳ Aguarde ${formatRemaining(chest.remainingMs)} para abrir novamente.`,
+        keyboard: [[Markup.button.callback("⬅️ Voltar", "vip_menu"), Markup.button.callback("🏠 Menu", "menu")]],
+      });
+      if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
+      return;
+    }
+
+    const reward = await pickVipChestReward(player.id);
+    await pool.query("UPDATE players SET vip_chest_opened_at = NOW() WHERE id = $1", [player.id]);
+
+    await sendCard(ctx, {
+      caption: reward.ok ? `🎁 Baú VIP aberto!\n${reward.message}` : reward.message || "Erro ao abrir o baú.",
+      keyboard: [[Markup.button.callback("⬅️ Voltar", "vip_menu"), Markup.button.callback("🏠 Menu", "menu")]],
+    });
     if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
   });
 
