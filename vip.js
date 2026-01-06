@@ -174,10 +174,14 @@ export function registerVip({ bot, app, deps }) {
   if (app) {
     app.post("/payments/mp/webhook", async (req, res) => {
       try {
-        const { type, data } = req.body || {};
-        if (type !== "payment" || !data?.id) return res.sendStatus(200);
-        const payment = await fetchPayment(data.id);
-        if (!payment || payment.status !== "approved" || payment.currency_id !== "BRL") {
+        const { type, data, action } = req.body || {};
+        const paymentId = req.query.id || data?.id || req.body?.id;
+        if (!paymentId) {
+          return res.sendStatus(200);
+        }
+        const payment = await fetchPayment(paymentId);
+        if (!payment) return res.sendStatus(200);
+        if (payment.status !== "approved" || payment.currency_id !== "BRL") {
           return res.sendStatus(200);
         }
         let ref;
