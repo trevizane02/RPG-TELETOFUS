@@ -258,9 +258,9 @@ export function registerArena(bot, deps) {
   }
 
   function postFightKeyboard() {
-    return Markup.inlineKeyboard([
+    return [
       [Markup.button.callback("🏟️ Arena", "arena_menu"), Markup.button.callback("🏠 Menu", "menu")],
-    ]).reply_markup;
+    ];
   }
 
   function getRankByTrophies(trophies = 0) {
@@ -382,22 +382,37 @@ export function registerArena(bot, deps) {
       const p1Id = arenaQueue.shift();
       const p1 = await getPlayer(p1Id);
       if (!p1) continue;
-      let bestIdx = -1;
-      let bestDiff = Infinity;
+      const p1T = p1.trophies || 0;
+      const p1Rank = getRankByTrophies(p1T);
+      let candidates = [];
       for (let i = 0; i < arenaQueue.length; i++) {
         const candId = arenaQueue[i];
         const cand = await getPlayer(candId);
         if (!cand) continue;
-        const diff = Math.abs((cand.trophies || 0) - (p1.trophies || 0));
-        if (diff < bestDiff) {
-          bestDiff = diff;
-          bestIdx = i;
+        const cT = cand.trophies || 0;
+        const cRank = getRankByTrophies(cT);
+        const sameRank = cRank.key === p1Rank.key;
+        const diff = Math.abs(cT - p1T);
+        if (sameRank || diff <= 300) {
+          candidates.push({ idx: i, diff });
         }
       }
-      if (bestIdx === -1) {
+      if (!candidates.length) {
+        // relax constraint to 600 troféus
+        for (let i = 0; i < arenaQueue.length; i++) {
+          const candId = arenaQueue[i];
+          const cand = await getPlayer(candId);
+          if (!cand) continue;
+          const diff = Math.abs((cand.trophies || 0) - p1T);
+          if (diff <= 600) candidates.push({ idx: i, diff });
+        }
+      }
+      if (!candidates.length) {
         arenaQueue.unshift(p1Id);
         return;
       }
+      candidates.sort((a, b) => a.diff - b.diff);
+      const bestIdx = candidates[0].idx;
       const [p2Id] = arenaQueue.splice(bestIdx, 1);
       await startArenaFight(p1Id, p2Id);
     }
