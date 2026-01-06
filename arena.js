@@ -236,13 +236,13 @@ export function registerArena(bot, deps) {
   }
 
   function arenaMenuKeyboard() {
-    return Markup.inlineKeyboard([
+    return [
       [Markup.button.callback("⚔️ Batalhar", "arena_queue")],
       [Markup.button.callback("📊 Ranks", "arena_ranks_menu")],
       [Markup.button.callback("🏅 Meu Rank", "arena_my_rank")],
       [Markup.button.callback("💰 Tesouros", "arena_chests")],
       [Markup.button.callback("🏠 Menu", "menu")],
-    ]).reply_markup;
+    ];
   }
 
   function fightKeyboard() {
