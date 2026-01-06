@@ -284,7 +284,8 @@ export function registerVip({ bot, app, deps }) {
     }
     keyboard.push([Markup.button.callback("⬅️ Voltar", "vip_menu"), Markup.button.callback("🏠 Menu", "menu")]);
 
-    await sendCard(ctx, { fileId: await getEventImage(EVENT_IMG_KEYS.chest), caption, keyboard });
+    const fileId = (await getEventImage(EVENT_IMG_KEYS.chest)) || (await getEventImage(EVENT_IMG_KEYS.main));
+    await sendCard(ctx, { fileId, caption, keyboard });
     if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
   });
 

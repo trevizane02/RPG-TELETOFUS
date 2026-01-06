@@ -719,16 +719,20 @@ function buildCombatKeyboard() {
 }
 
 async function awardItem(playerId, item) {
-  // Verifica se o inventário está cheio (20 slots máximo, equipados NÃO contam)
-  const slotsRes = await pool.query(`
-    SELECT COUNT(*) as used
-    FROM inventory
-    WHERE player_id = $1
-    AND equipped = FALSE
-  `, [playerId]);
-  
+  // Verifica limite de slots (equipados NÃO contam)
+  const slotsRes = await pool.query(
+    `
+    SELECT 
+      (SELECT COUNT(*) FROM inventory WHERE player_id = $1 AND equipped = FALSE) as used,
+      COALESCE(p.inventory_slots_max, 20) as max
+    FROM players p
+    WHERE p.id = $1
+  `,
+    [playerId]
+  );
   const slotsUsed = parseInt(slotsRes.rows[0]?.used || 0);
-  
+  const slotsMax = parseInt(slotsRes.rows[0]?.max || 20);
+
   // Se consumível, tenta stackar (não verifica slots ainda)
   if (item.slot === 'consumable') {
     const existingRes = await pool.query(`
@@ -748,7 +752,7 @@ async function awardItem(playerId, item) {
   }
   
   // Valida limite de slots (para novos itens, não stacks)
-  if (slotsUsed >= 20) {
+  if (slotsUsed >= slotsMax) {
     return { success: false, reason: 'inventory_full' };
   }
   
