@@ -1,5 +1,5 @@
 import { Markup } from "telegraf";
-import { createTofuPreference, getTofuPack, fetchPayment } from "./services/mp.js";
+import { createTofuPreference, getTofuPack, fetchPayment, createPixPayment } from "./services/mp.js";
 
 const VIP_PLANS = [
   { key: "30", label: "30 dias", days: 30, cost: 18 },
@@ -172,15 +172,26 @@ export function registerVip({ bot, app, deps }) {
       return;
     }
     try {
-      const url = await createTofuPreference({ telegramId: String(ctx.from.id), pack });
+      const pix = await createPixPayment({ telegramId: String(ctx.from.id), pack });
+      if (!pix?.qr_code) throw new Error("PIX indisponível");
+      const qrBuffer = pix.qr_code_base64 ? Buffer.from(pix.qr_code_base64, "base64") : null;
+      const caption =
+        `✅ PIX gerado para o pacote ${packInfo.qty} Tofus (R$ ${packInfo.price}).\n` +
+        `Use o código copia e cola abaixo ou o QR para pagar.\n` +
+        `Após o pagamento aprovado, os Tofus serão creditados automaticamente.`;
       const keyboard = [
-        [Markup.button.url("🔗 Pagar via PIX (Mercado Pago)", url)],
+        [Markup.button.callback("📋 Copiar código PIX", `vip_pix_copy:${pack}`)],
         [Markup.button.callback("⬅️ Voltar", "vip_tofus"), Markup.button.callback("🏠 Menu", "menu")],
       ];
-      const caption =
-        `✅ Link gerado para o pacote ${packInfo.qty} Tofus (R$ ${packInfo.price}).\n` +
-        `Após o pagamento aprovado, os Tofus serão creditados automaticamente.`;
-      await sendCard(ctx, { caption, keyboard });
+      if (qrBuffer) {
+        await ctx.replyWithPhoto({ source: qrBuffer }, { caption, reply_markup: Markup.inlineKeyboard(keyboard).reply_markup });
+        await ctx.reply(pix.qr_code || "Código PIX não disponível", { reply_markup: Markup.inlineKeyboard(keyboard).reply_markup });
+      } else {
+        await sendCard(ctx, { caption: `${caption}\n\n${pix.qr_code || "Código PIX não disponível"}`, keyboard });
+      }
+      // Armazena o código para copiar
+      ctx.session ??= {};
+      ctx.session.lastPixCode = pix.qr_code;
     } catch (e) {
       console.error("createTofuPreference", e);
       await sendCard(ctx, {
@@ -394,3 +405,12 @@ export function registerVip({ bot, app, deps }) {
     app.get("/payments/mp/webhook", handleWebhook);
   }
 }
+  bot.action(/^vip_pix_copy:(\d+)$/, async (ctx) => {
+    const code = ctx.session?.lastPixCode;
+    if (!code) {
+      if (ctx.callbackQuery) ctx.answerCbQuery("Código indisponível").catch(() => {});
+      return;
+    }
+    await ctx.replyWithMarkdownV2(`\` ${code.replace(/[`]/g, "")} \``);
+    if (ctx.callbackQuery) ctx.answerCbQuery("Código enviado").catch(() => {});
+  });

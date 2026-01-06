@@ -57,3 +57,27 @@ export async function fetchPayment(paymentId) {
   const res = await payClient.get({ id: paymentId });
   return res;
 }
+
+export async function createPixPayment({ telegramId, pack }) {
+  ensureConfigured();
+  const info = packs[pack];
+  if (!info) throw new Error("Pacote inválido");
+  const baseUrl = process.env.BASE_URL || "";
+  const notification_url = baseUrl ? `${baseUrl.replace(/\/$/, "")}/payments/mp/webhook` : undefined;
+  const res = await payClient.create({
+    body: {
+      transaction_amount: info.price,
+      description: `Pacote ${info.qty} Tofus`,
+      payment_method_id: "pix",
+      external_reference: JSON.stringify({ telegramId, pack }),
+      notification_url,
+    },
+    requestOptions: { idempotencyKey: `pix-${telegramId}-${pack}-${Date.now()}` },
+  });
+  const qr = res?.point_of_interaction?.transaction_data;
+  return {
+    payment_id: res?.id,
+    qr_code: qr?.qr_code,
+    qr_base64: qr?.qr_code_base64,
+  };
+}
