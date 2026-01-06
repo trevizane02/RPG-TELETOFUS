@@ -1,7 +1,11 @@
 import { Markup } from "telegraf";
 import { createTofuPreference, getTofuPack, fetchPayment } from "./services/mp.js";
 
-const VIP_COST = 18;
+const VIP_PLANS = [
+  { key: "30", label: "30 dias", days: 30, cost: 18 },
+  { key: "90", label: "90 dias", days: 90, cost: 49 },
+  { key: "180", label: "180 dias", days: 180, cost: 92 },
+];
 const EVENT_IMG_KEYS = {
   main: "vip_cover",
   tofus: "vip_tofus_cover",
@@ -129,7 +133,7 @@ export function registerVip({ bot, app, deps }) {
 
     const keyboard = [
       [Markup.button.callback("💰 Comprar Tofus", "vip_tofus")],
-      [Markup.button.callback(`⭐ Assinar VIP (${VIP_COST} Tofus)`, "vip_buy")],
+      [Markup.button.callback("⭐ Assinar VIP", "vip_buy_menu")],
       [Markup.button.callback("🎁 Baú VIP semanal", "vip_chest")],
       ...buildBackMenu(),
     ];
@@ -188,41 +192,50 @@ export function registerVip({ bot, app, deps }) {
   });
 
   // Comprar VIP
-  bot.action("vip_buy", async (ctx) => {
+  bot.action("vip_buy_menu", async (ctx) => {
     const player = await getPlayer(String(ctx.from.id), ctx.from.first_name);
     const active = isVip(player);
     const expires = active ? formatDate(player.vip_until) : "—";
     const caption =
-      `⭐ VIP 30 dias\n` +
-      `Custo: ${VIP_COST} Tofus\n` +
-      `Seu saldo: ${player.tofus || 0} Tofus\n` +
-      `Status atual: ${active ? `Ativo (até ${expires})` : "Não VIP"}`;
-    const keyboard = [
-      [Markup.button.callback(`✅ Confirmar (-${VIP_COST} Tofus)`, "vip_buy_confirm")],
-      [Markup.button.callback("⬅️ Voltar", "vip_menu"), Markup.button.callback("🏠 Menu", "menu")],
-    ];
+      `⭐ Assinar VIP\n` +
+      `Saldo: ${player.tofus || 0} Tofus\n` +
+      `Status atual: ${active ? `Ativo (até ${expires})` : "Não VIP"}\n\n` +
+      `Planos disponíveis:\n` +
+      `• 30 dias — 18 Tofus\n` +
+      `• 90 dias — 49 Tofus\n` +
+      `• 180 dias — 92 Tofus`;
+    const keyboard = VIP_PLANS.map((p) => [
+      Markup.button.callback(`${p.label} (-${p.cost} Tofus)`, `vip_buy_${p.key}`),
+    ]);
+    keyboard.push([Markup.button.callback("⬅️ Voltar", "vip_menu"), Markup.button.callback("🏠 Menu", "menu")]);
     await sendCard(ctx, { fileId: await getEventImage(EVENT_IMG_KEYS.buy), caption, keyboard });
     if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
   });
 
-  bot.action("vip_buy_confirm", async (ctx) => {
+  bot.action(/^vip_buy_(\d+)$/, async (ctx) => {
+    const planKey = ctx.match[1];
+    const plan = VIP_PLANS.find((p) => p.key === planKey);
+    if (!plan) {
+      if (ctx.callbackQuery) ctx.answerCbQuery("Plano inválido").catch(() => {});
+      return;
+    }
     const player = await getPlayer(String(ctx.from.id), ctx.from.first_name);
     try {
       const res = await pool.query(
         `
         UPDATE players
         SET tofus = tofus - $1,
-            vip_until = GREATEST(COALESCE(vip_until, NOW()), NOW()) + INTERVAL '30 days',
+            vip_until = GREATEST(COALESCE(vip_until, NOW()), NOW()) + ($2 || ' days')::interval,
             energy_max = GREATEST(energy_max, 40),
             inventory_slots_max = GREATEST(inventory_slots_max, 30),
             energy = LEAST(energy, GREATEST(energy_max, 40))
-        WHERE id = $2 AND tofus >= $1
+        WHERE id = $3 AND tofus >= $1
         RETURNING vip_until, tofus, energy_max, inventory_slots_max, energy
       `,
-        [VIP_COST, player.id]
+        [plan.cost, plan.days, player.id]
       );
       if (!res.rows.length) {
-        const needed = Math.max(0, VIP_COST - (player.tofus || 0));
+        const needed = Math.max(0, plan.cost - (player.tofus || 0));
         await sendCard(ctx, {
           caption: `❌ Tofus insuficientes.\nFaltam ${needed} Tofus.`,
           keyboard: [
@@ -235,7 +248,7 @@ export function registerVip({ bot, app, deps }) {
       }
       const newVip = res.rows[0].vip_until;
       await sendCard(ctx, {
-        caption: `🌟 VIP ativado!\nVálido até: ${formatDate(newVip)}\nSaldo: ${res.rows[0].tofus} Tofus`,
+        caption: `🌟 VIP ativado!\nPlano: ${plan.label}\nVálido até: ${formatDate(newVip)}\nSaldo: ${res.rows[0].tofus} Tofus`,
         keyboard: [[Markup.button.callback("🏠 Menu", "menu")], [Markup.button.callback("💰 Comprar Tofus", "vip_tofus")]],
       });
     } catch (e) {

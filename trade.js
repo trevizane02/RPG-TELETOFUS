@@ -91,6 +91,7 @@ export function registerTrade(bot, deps) {
       ...equipablesRes.rows.map((r) => ({ ...r, type: "equip", invId: r.id, qty: 1 })),
       ...consumablesRes.rows.map((r) => ({ ...r, type: "cons" })),
     ];
+    // Moedas negociáveis
     if (player.gold > 0) items.push({ item_key: "__gold", qty: player.gold, name: "Gold", rarity: "moeda", slot: "currency", type: "currency" });
     if ((player.tofus || 0) > 0) items.push({ item_key: "__tofus", qty: player.tofus, name: "Tofus", rarity: "moeda", slot: "currency", type: "currency" });
 
