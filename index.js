@@ -361,6 +361,7 @@ function formatDateShort(dt) {
 }
 
 function getActiveBuff(player) {
+  if (!player) return { atk: 0, def: 0, crit: 0 };
   if (!player.temp_buff_expires_at) return { atk: 0, def: 0, crit: 0 };
   const expires = new Date(player.temp_buff_expires_at);
   const active = expires.getTime() > Date.now();
@@ -795,7 +796,7 @@ function formatBuffRemaining(expiresAt) {
   const diffMs = new Date(expiresAt) - new Date();
   if (diffMs <= 0) return null;
   const min = Math.floor(diffMs / 60000);
-  return min <= 0 ? "<1min" : `${min}min`;
+  return min <= 0 ? "menos de 1min" : `${min}min`;
 }
 
 // --------------------------------------
@@ -1160,9 +1161,10 @@ async function renderProfile(ctx) {
   const lvlInfo = await getLevelFromTotalXp(player.xp_total);
   const xpBar = makeBar(player.xp_total - lvlInfo.level_xp_start, lvlInfo.xp_to_next || 1, 10);
   const map = await getMapByKey(player.current_map_key);
+  const buffRemaining = formatBuffRemaining(player.temp_buff_expires_at) || "até acabar";
   const buffText =
     buff && (buff.atk || buff.def || buff.crit)
-      ? `\n🧪 Buff: +${buff.atk || 0} ATK / +${buff.def || 0} DEF / +${buff.crit || 0}% CRIT (${formatBuffRemaining(player.temp_buff_expires_at) || "até acabar"})`
+      ? `\n🧪 Buff: +${buff.atk || 0} ATK / +${buff.def || 0} DEF / +${buff.crit || 0}% CRIT (${escapeHtml(buffRemaining)})`
       : "";
 
   const name = escapeHtml(player.name || "Aventureiro");

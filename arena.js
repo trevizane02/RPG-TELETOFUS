@@ -59,6 +59,8 @@ export function registerArena(bot, deps) {
   const itemCache = new Map(); // item_key -> row
   const fightMessages = new Map(); // userId -> messageId
 
+  const escapeHtml = (str = "") => str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
   function isVip(player) {
     if (!player?.vip_until) return false;
     const exp = new Date(player.vip_until);
@@ -438,6 +440,7 @@ export function registerArena(bot, deps) {
       avatar: await getRankImage(r1),
       defBonus: 0,
       turnTimer: null,
+      finished: false,
     };
     const fight2 = {
       opponentId: p1Id,
@@ -452,6 +455,7 @@ export function registerArena(bot, deps) {
       avatar: await getRankImage(r2),
       defBonus: 0,
       turnTimer: null,
+      finished: false,
     };
     arenaFights.set(p1Id, fight1);
     arenaFights.set(p2Id, fight2);
@@ -527,7 +531,12 @@ export function registerArena(bot, deps) {
 
   async function finishFight(winnerId, loserId, { surrender = false } = {}) {
     // evita dupla finalização
-    if (!arenaFights.has(winnerId) || !arenaFights.has(loserId)) return;
+    const fightWinner = arenaFights.get(winnerId);
+    const fightLoser = arenaFights.get(loserId);
+    if (!fightWinner || !fightLoser) return;
+    if (fightWinner.finished || fightLoser.finished) return;
+    fightWinner.finished = true;
+    fightLoser.finished = true;
     const winner = await getPlayer(winnerId);
     const loser = await getPlayer(loserId);
     const { gain: trophyGain, loss: trophyLoss } = calcTrophyDelta(winner.trophies || 0, loser.trophies || 0, { surrender });
@@ -555,8 +564,8 @@ export function registerArena(bot, deps) {
 
     arenaFights.delete(winnerId);
     arenaFights.delete(loserId);
-    if (winner.turnTimer) clearTimeout(winner.turnTimer);
-    if (loser.turnTimer) clearTimeout(loser.turnTimer);
+    if (fightWinner.turnTimer) clearTimeout(fightWinner.turnTimer);
+    if (fightLoser.turnTimer) clearTimeout(fightLoser.turnTimer);
     fightMessages.delete(winnerId);
     fightMessages.delete(loserId);
 
@@ -577,6 +586,7 @@ export function registerArena(bot, deps) {
       if (ctx.callbackQuery) ctx.answerCbQuery("Sem luta").catch(() => {});
       return;
     }
+    if (fight.finished) return;
     const oppFight = arenaFights.get(fight.opponentId);
     if (!oppFight) {
       arenaFights.delete(userId);
@@ -643,7 +653,7 @@ export function registerArena(bot, deps) {
 
   async function autoAction(userId) {
     const fight = arenaFights.get(userId);
-    if (!fight) return;
+    if (!fight || fight.finished) return;
     const fakeCtx = { from: { id: userId }, answerCbQuery: () => Promise.resolve() };
     await handleAction(fakeCtx, "attack");
   }
@@ -827,11 +837,10 @@ export function registerArena(bot, deps) {
       return;
     }
     await ctx.answerCbQuery("Tesouro aberto!").catch(() => {});
-    const escapeMd = (text) => text.replace(/([_*[\]()~`>#+\-=|{}.!])/g, "\\$1");
     await sendCard(ctx, {
-      caption: `🎁 Tesouro aberto!\n${escapeMd(res.message)}`,
+      caption: `🎁 Tesouro aberto!\n${escapeHtml(res.message)}`,
       keyboard: [[Markup.button.callback("💰 Meus Tesouros", "arena_chests")], [Markup.button.callback("🏟️ Arena", "arena_menu")], [Markup.button.callback("🏠 Menu", "menu")]],
-      parse_mode: "MarkdownV2",
+      parse_mode: "HTML",
     });
   });
 }
