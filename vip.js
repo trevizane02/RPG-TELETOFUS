@@ -16,6 +16,7 @@ const EVENT_IMG_KEYS = {
 export function registerVip({ bot, app, deps }) {
   const { pool, getPlayer, setPlayerState, sendCard, awardItem, STATES } = deps;
   const imageCache = new Map(); // key -> file_id|null
+  const pixCodes = new Map(); // userId -> last pix code
 
   async function getEventImage(key) {
     if (imageCache.has(key)) return imageCache.get(key);
@@ -190,8 +191,7 @@ export function registerVip({ bot, app, deps }) {
         await sendCard(ctx, { caption: `${caption}\n\n${pix.qr_code || "Código PIX não disponível"}`, keyboard });
       }
       // Armazena o código para copiar
-      ctx.session ??= {};
-      ctx.session.lastPixCode = pix.qr_code;
+      pixCodes.set(String(ctx.from.id), pix.qr_code);
     } catch (e) {
       console.error("createTofuPreference", e);
       await sendCard(ctx, {
@@ -404,9 +404,9 @@ export function registerVip({ bot, app, deps }) {
     app.post("/payments/mp/webhook", handleWebhook);
     app.get("/payments/mp/webhook", handleWebhook);
   }
-}
+
   bot.action(/^vip_pix_copy:(\d+)$/, async (ctx) => {
-    const code = ctx.session?.lastPixCode;
+    const code = pixCodes.get(String(ctx.from.id));
     if (!code) {
       if (ctx.callbackQuery) ctx.answerCbQuery("Código indisponível").catch(() => {});
       return;
@@ -414,3 +414,4 @@ export function registerVip({ bot, app, deps }) {
     await ctx.replyWithMarkdownV2(`\` ${code.replace(/[`]/g, "")} \``);
     if (ctx.callbackQuery) ctx.answerCbQuery("Código enviado").catch(() => {});
   });
+}
