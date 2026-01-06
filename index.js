@@ -818,6 +818,12 @@ bot.command("setitemimg", async (ctx) => {
   ctx.reply(`Envie a imagem do item *${key}* agora.`, { parse_mode: "Markdown" });
 });
 
+bot.command("reset_trophies", async (ctx) => {
+  if (!isAdmin(ctx.from.id)) return ctx.reply("🚫 Apenas admin.");
+  await pool.query("UPDATE players SET trophies = 0");
+  await ctx.reply("🏆 Troféus de todos os jogadores zerados.");
+});
+
 const ARENA_RANK_IMG_KEYS = [
   "arena_rank_sangue_novo",
   "arena_rank_desafiador",
