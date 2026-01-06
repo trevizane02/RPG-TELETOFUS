@@ -9,7 +9,7 @@ export const ITEM_SEEDS = [
   { key: "knight_blade", name: "Lâmina do Cavaleiro", slot: "weapon", rarity: "rare", atk_min: 4, atk_max: 7, crit_min: 1, crit_max: 4, drop_rate: 0.01, map_key: "swamp" },
   { key: "longbow", name: "Arco Longo", slot: "weapon", rarity: "uncommon", atk_min: 3, atk_max: 7, crit_min: 3, crit_max: 6, drop_rate: 0.015, map_key: "forest" },
   { key: "crossbow", name: "Besta Reforçada", slot: "weapon", rarity: "rare", atk_min: 4, atk_max: 7, crit_min: 1, crit_max: 3, drop_rate: 0.01, map_key: "swamp" },
-  { key: "arcane_wand", name: "Varinha Arcana", slot: "weapon", rarity: "uncommon", atk_min: 3, atk_max: 7, crit_min: 2, crit_max: 5, drop_rate: 0.015, map_key: "grave" },
+  { key: "arcane_wand", name: "Varinha Arcana", slot: "weapon", rarity: "uncommon", atk_min: 3, atk_max: 7, crit_min: 2, crit_max: 5, drop_rate: 0.015, map_key: "abyss" },
   { key: "crystal_staff", name: "Cajado de Cristal", slot: "weapon", rarity: "rare", atk_min: 4, atk_max: 7, crit_min: 2, crit_max: 4, drop_rate: 0.01, map_key: "swamp" },
   // Grave class weapons
   { key: "grave_war_sword", name: "Espada Tumular", slot: "weapon", rarity: "rare", atk_min: 4, atk_max: 8, crit_min: 0, crit_max: 2, drop_rate: 0.0007, map_key: "grave", class_req: "guerreiro", level_req: 23 },
