@@ -51,9 +51,9 @@ const CLASS_CONFIG = {
   mago: { hp_max: 105, base_atk: 8, base_def: 2, base_crit: 9, desc: "ATK/CRIT altos, depende de evitar dano" },
 };
 const CLASS_WEAPONS = {
-  guerreiro: ["short_sword", "sabre", "battle_axe", "knight_blade"],
-  arqueiro: ["hunting_bow", "longbow", "crossbow"],
-  mago: ["novice_rod", "mage_staff", "arcane_wand", "crystal_staff"],
+  guerreiro: ["short_sword", "sabre", "battle_axe", "knight_blade", "grave_war_sword"],
+  arqueiro: ["hunting_bow", "longbow", "crossbow", "grave_arc_bow"],
+  mago: ["novice_rod", "mage_staff", "arcane_wand", "crystal_staff", "grave_mag_wand"],
 };
 
 const SHOP_DEFS = {
@@ -680,7 +680,7 @@ async function sendCard(ctx, { fileId, caption, keyboard, parse_mode = "Markdown
 }
 
 async function maybeDropItem(mapKey, difficulty = 1, isBoss = false, opts = {}) {
-  const { dungeon = false } = opts;
+  const { dungeon = false, playerClass = null, playerLevel = null } = opts;
   const res = await pool.query("SELECT * FROM items WHERE map_key = $1 OR map_key IS NULL", [mapKey]);
   const items = res.rows;
   if (items.length === 0) return null;
@@ -689,6 +689,9 @@ async function maybeDropItem(mapKey, difficulty = 1, isBoss = false, opts = {}) 
   for (const item of items) {
     if (item.boss_dungeon_only && !(dungeon && isBoss)) continue;
     if (item.boss_only && !isBoss) continue;
+    if (item.class_req && playerClass && item.class_req !== playerClass) continue;
+    if (item.class_req && !playerClass) continue;
+    if (item.level_req && playerLevel != null && playerLevel < item.level_req) continue;
     const base = Number(item.drop_rate || 0.01);
     const difficultyBonus = 1 + Math.max(0, difficulty - 1) * 0.35;
     const bonusFactor =
@@ -1382,12 +1385,13 @@ async function startRun(ctx, mapKey) {
 }
 
 async function startChest(ctx, player, map) {
+  const lvlInfo = await getLevelFromTotalXp(player.xp_total);
   const gold = Math.floor(Math.random() * 10 * map.difficulty) + 20 * map.difficulty;
   await pool.query("UPDATE players SET gold = gold + $1 WHERE id = $2", [gold, player.id]);
   await setPlayerState(player.id, STATES.MENU);
 
   let lootMsg = "";
-  const item = await maybeDropItem(map.key, map.difficulty, false, { dungeon: false });
+  const item = await maybeDropItem(map.key, map.difficulty, false, { dungeon: false, playerClass: player.class, playerLevel: lvlInfo.level });
   if (item) {
     const result = await awardItem(player.id, item);
     if (result.success) {
@@ -1500,6 +1504,7 @@ async function startCombat(ctx, player, map, isRare) {
     mapKey: map.key,
     mapDifficulty: map.difficulty || 1,
     turn: 1,
+    resolving: false,
   };
 
   fights.set(String(ctx.from.id), fight);
@@ -1549,8 +1554,14 @@ async function handleAttack(ctx) {
     if (ctx.callbackQuery) ctx.answerCbQuery("Luta acabou.");
     return;
   }
+  if (fight.resolving) {
+    if (ctx.callbackQuery) ctx.answerCbQuery("Processando...").catch(() => {});
+    return;
+  }
+  fight.resolving = true;
 
   let player = await getPlayer(userId, ctx.from.first_name);
+  const lvlInfo = await getLevelFromTotalXp(player.xp_total);
   const stats = await getPlayerStats(player);
 
   const isCrit = Math.random() * 100 < stats.total_crit;
@@ -1560,7 +1571,7 @@ async function handleAttack(ctx) {
 
   if (fight.mobHp <= 0) {
     fights.delete(userId);
-    const item = await maybeDropItem(fight.mapKey, fight.mapDifficulty, fight.mobRarity === "boss", { dungeon: false });
+    const item = await maybeDropItem(fight.mapKey, fight.mapDifficulty, fight.mobRarity === "boss", { dungeon: false, playerClass: player.class, playerLevel: lvlInfo.level });
     await pool.query("UPDATE players SET xp_total = xp_total + $1, gold = gold + $2 WHERE id = $3", [
       fight.mobXp,
       fight.mobGold,
@@ -1618,6 +1629,7 @@ async function handleAttack(ctx) {
   }
 
   fight.turn += 1;
+  fight.resolving = false;
   await renderCombatStatus(ctx, player, stats, fight, log);
   if (ctx.callbackQuery) ctx.answerCbQuery();
 }
@@ -1956,8 +1968,9 @@ async function runDungeon(session) {
     const rewardGold = Math.round(mob.gold_gain * session.difficulty * scale);
     for (const uid of session.members) {
       const p = await getPlayer(uid);
+      const lvlInfo = await getLevelFromTotalXp(p.xp_total);
       await pool.query("UPDATE players SET xp_total = xp_total + $1, gold = gold + $2 WHERE id = $3", [rewardXp, rewardGold, p.id]);
-      const item = await maybeDropItem(map.key, map.difficulty, mob.rarity === "boss", { dungeon: false });
+      const item = await maybeDropItem(map.key, map.difficulty, mob.rarity === "boss", { dungeon: false, playerClass: p.class, playerLevel: lvlInfo.level });
       if (item) await awardItem(p.id, item);
       await bot.telegram.sendMessage(
         uid,
@@ -2100,7 +2113,7 @@ bot.action(/equip_(.+)/, async (ctx) => {
 
   const res = await pool.query(
     `
-    SELECT inv.id, inv.equipped, i.slot, i.key as item_key, i.name
+    SELECT inv.id, inv.equipped, i.slot, i.key as item_key, i.name, i.class_req, i.level_req
     FROM inventory inv
     JOIN items i ON i.key = inv.item_key
     WHERE inv.id = $1 AND inv.player_id = $2
@@ -2113,6 +2126,16 @@ bot.action(/equip_(.+)/, async (ctx) => {
   }
 
   const item = res.rows[0];
+  const lvlInfo = await getLevelFromTotalXp(player.xp_total);
+
+  if (item.class_req && item.class_req !== player.class) {
+    await ctx.answerCbQuery("Sua classe não pode usar esse item.");
+    return;
+  }
+  if (item.level_req && lvlInfo.level < item.level_req) {
+    await ctx.answerCbQuery(`Requer nível ${item.level_req}.`);
+    return;
+  }
   if (item.slot === "weapon") {
     const allowed = CLASS_WEAPONS[player.class] || [];
     if (!allowed.includes(item.item_key)) {

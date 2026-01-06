@@ -410,7 +410,7 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
 
         const dropCount = randInt(1, 4);
         for (let i = 0; i < dropCount; i++) {
-          const drop = await maybeDropItem(session.mapKey, Math.min(4, floorIndex + 2), true, { dungeon: true });
+          const drop = await maybeDropItem(session.mapKey, Math.min(4, floorIndex + 2), true, { dungeon: true, playerClass: player.class });
           if (drop) {
             await awardItem(player.id, drop);
             loot.items.push(drop);
@@ -426,7 +426,7 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
           if (bone) loot.items.push(bone);
         }
       } else {
-        const drop = await maybeDropItem(session.mapKey, Math.min(3, floorIndex + 1 + (floor.scaling?.tierBonus || 0)), false, { dungeon: true });
+        const drop = await maybeDropItem(session.mapKey, Math.min(3, floorIndex + 1 + (floor.scaling?.tierBonus || 0)), false, { dungeon: true, playerClass: player.class });
         if (drop) {
           await awardItem(player.id, drop);
           loot.items.push(drop);
