@@ -57,6 +57,7 @@ export function registerArena(bot, deps) {
   const rankImages = new Map(); // key -> file_id or null
   const coverImages = new Map(); // key -> file_id or null
   const itemCache = new Map(); // item_key -> row
+  const fightMessages = new Map(); // userId -> messageId
 
   function isVip(player) {
     if (!player?.vip_until) return false;
@@ -246,14 +247,14 @@ export function registerArena(bot, deps) {
   }
 
   function fightKeyboard() {
-    return Markup.inlineKeyboard([
+    return [
       [
         Markup.button.callback("⚔️ Atacar", "arena_attack"),
         Markup.button.callback("🛡️ Defender", "arena_defend"),
         Markup.button.callback("🏳️ Sair", "arena_exit"),
       ],
       [Markup.button.callback("🏠 Menu", "menu")],
-    ]).reply_markup;
+    ];
   }
 
   function postFightKeyboard() {
@@ -301,7 +302,7 @@ export function registerArena(bot, deps) {
   }
 
   async function sendToUser(userId, { fileId, caption, keyboard }) {
-    const opts = { reply_markup: keyboard, parse_mode: "Markdown" };
+    const opts = { reply_markup: keyboard ? Markup.inlineKeyboard(keyboard).reply_markup : undefined, parse_mode: "Markdown" };
     if (fileId) {
       try {
         await bot.telegram.sendPhoto(userId, fileId, { caption, ...opts });
@@ -311,6 +312,31 @@ export function registerArena(bot, deps) {
       }
     }
     await bot.telegram.sendMessage(userId, caption, opts);
+  }
+
+  async function sendOrEditFight(userId, { fileId, caption, keyboard }) {
+    const msgId = fightMessages.get(userId);
+    const reply_markup = keyboard ? Markup.inlineKeyboard(keyboard).reply_markup : undefined;
+    if (msgId) {
+      try {
+        await bot.telegram.editMessageMedia(
+          userId,
+          msgId,
+          undefined,
+          { type: "photo", media: fileId, caption, parse_mode: "Markdown" },
+          { reply_markup }
+        );
+        return;
+      } catch (e) {
+        try {
+          await bot.telegram.deleteMessage(userId, msgId);
+        } catch {
+          // ignore
+        }
+      }
+    }
+    const sent = await bot.telegram.sendPhoto(userId, fileId, { caption, parse_mode: "Markdown", reply_markup });
+    if (sent?.message_id) fightMessages.set(userId, sent.message_id);
   }
 
   async function showArenaMenu(ctx) {
@@ -396,6 +422,7 @@ export function registerArena(bot, deps) {
       rank: r1,
       avatar: await getRankImage(r1),
       defBonus: 0,
+      turnTimer: null,
     };
     const fight2 = {
       opponentId: p1Id,
@@ -409,12 +436,15 @@ export function registerArena(bot, deps) {
       rank: r2,
       avatar: await getRankImage(r2),
       defBonus: 0,
+      turnTimer: null,
     };
     arenaFights.set(p1Id, fight1);
     arenaFights.set(p2Id, fight2);
 
     await sendFightIntro(p1Id, fight1, fight2);
     await sendFightIntro(p2Id, fight2, fight1);
+    fight1.turnTimer = setTimeout(() => autoAction(p1Id), 20000);
+    fight2.turnTimer = setTimeout(() => autoAction(p2Id), 20000);
   }
 
   async function sendFightIntro(userId, fight, opponentFight) {
@@ -422,7 +452,7 @@ export function registerArena(bot, deps) {
       `🏟️ Arena contra ${opponentFight.name}\n` +
       `Rank do oponente: ${opponentFight.rank.name}\n` +
       `HP dele: ${opponentFight.hp}/${opponentFight.maxHp}`;
-    await sendToUser(userId, { fileId: opponentFight.avatar, caption, keyboard: fightKeyboard() });
+    await sendOrEditFight(userId, { fileId: opponentFight.avatar, caption, keyboard: fightKeyboard() });
   }
 
   function consumeDefBonus(fight) {
@@ -476,8 +506,8 @@ export function registerArena(bot, deps) {
     const me = arenaFights.get(meId);
     const opp = arenaFights.get(oppId);
     if (!me || !opp) return;
-    await sendToUser(meId, { fileId: opp.avatar, caption: renderStatusCaption(me, opp, logMe), keyboard: fightKeyboard() });
-    await sendToUser(oppId, { fileId: me.avatar, caption: renderStatusCaption(opp, me, logOpp), keyboard: fightKeyboard() });
+    await sendOrEditFight(meId, { fileId: opp.avatar, caption: renderStatusCaption(me, opp, logMe), keyboard: fightKeyboard() });
+    await sendOrEditFight(oppId, { fileId: me.avatar, caption: renderStatusCaption(opp, me, logOpp), keyboard: fightKeyboard() });
   }
 
   async function finishFight(winnerId, loserId, { surrender = false } = {}) {
@@ -508,6 +538,10 @@ export function registerArena(bot, deps) {
 
     arenaFights.delete(winnerId);
     arenaFights.delete(loserId);
+    if (winner.turnTimer) clearTimeout(winner.turnTimer);
+    if (loser.turnTimer) clearTimeout(loser.turnTimer);
+    fightMessages.delete(winnerId);
+    fightMessages.delete(loserId);
 
     await sendToUser(winnerId, {
       caption: `🏆 Você venceu ${loser.name}!\n+${trophyGain} troféus\n+${coinGain} arena coins${chestMsgWinner}`,
@@ -580,8 +614,21 @@ export function registerArena(bot, deps) {
       }
     }
 
-    await ctx.answerCbQuery().catch(() => {});
+    if (ctx.answerCbQuery) await ctx.answerCbQuery().catch(() => {});
     await renderArenaStatus(userId, logMe, fight.opponentId, logOpp);
+    if (fight.turnTimer) clearTimeout(fight.turnTimer);
+    fight.turnTimer = setTimeout(() => autoAction(userId), 20000);
+    if (oppFight) {
+      if (oppFight.turnTimer) clearTimeout(oppFight.turnTimer);
+      oppFight.turnTimer = setTimeout(() => autoAction(fight.opponentId), 20000);
+    }
+  }
+
+  async function autoAction(userId) {
+    const fight = arenaFights.get(userId);
+    if (!fight) return;
+    const fakeCtx = { from: { id: userId }, answerCbQuery: () => Promise.resolve() };
+    await handleAction(fakeCtx, "attack");
   }
 
   bot.action("arena_attack", async (ctx) => handleAction(ctx, "attack"));
@@ -639,7 +686,7 @@ export function registerArena(bot, deps) {
       `• Campeão (1200-1999)\n` +
       `• Lenda (2000+)\n` +
       `▲ Suba com troféus; derrotas retiram troféus.`;
-    await sendCard(ctx, { fileId, caption, keyboard: Markup.inlineKeyboard(keyboard).reply_markup });
+    await sendCard(ctx, { fileId, caption, keyboard });
     if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
   });
 
@@ -763,9 +810,11 @@ export function registerArena(bot, deps) {
       return;
     }
     await ctx.answerCbQuery("Tesouro aberto!").catch(() => {});
+    const escapeMd = (text) => text.replace(/([_*[\]()~`>#+\-=|{}.!])/g, "\\$1");
     await sendCard(ctx, {
-      caption: `🎁 Tesouro aberto!\n${res.message}`,
+      caption: `🎁 Tesouro aberto!\n${escapeMd(res.message)}`,
       keyboard: [[Markup.button.callback("💰 Meus Tesouros", "arena_chests")], [Markup.button.callback("🏟️ Arena", "arena_menu")], [Markup.button.callback("🏠 Menu", "menu")]],
+      parse_mode: "MarkdownV2",
     });
   });
 }
