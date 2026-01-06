@@ -76,7 +76,7 @@ export function registerVip({ bot, app, deps }) {
       `Saldo atual: ${player.tofus || 0} Tofus\n\n` +
       `Escolha um pacote:`;
     const keyboard = [
-      [Markup.button.callback("💰 15 Tofus — R$ 15", "vip_tofus_pack:15")],
+      [Markup.button.callback("💰 18 Tofus — R$ 18", "vip_tofus_pack:18")],
       [Markup.button.callback("⭐ 30 Tofus — R$ 28", "vip_tofus_pack:30")],
       [Markup.button.callback("🔥 100 Tofus — R$ 85", "vip_tofus_pack:100")],
       [Markup.button.callback("⬅️ Voltar", "vip_menu"), Markup.button.callback("🏠 Menu", "menu")],

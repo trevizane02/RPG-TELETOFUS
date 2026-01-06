@@ -1,7 +1,7 @@
 import mercadopago from "mercadopago";
 
 const packs = {
-  "15": { qty: 15, price: 15 },
+  "18": { qty: 18, price: 18 },
   "30": { qty: 30, price: 28 },
   "100": { qty: 100, price: 85 },
 };

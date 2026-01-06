@@ -835,6 +835,7 @@ const ARENA_RANK_IMG_KEYS = [
   "arena_ranks_cover",
   "arena_chests_cover",
 ];
+const VIP_IMG_KEYS = ["vip_cover", "vip_tofus_cover", "vip_buy_cover"];
 
 bot.command("seteventimg", async (ctx) => {
   if (!isAdmin(ctx.from.id)) return ctx.reply("🚫 Apenas admin.");
@@ -856,6 +857,17 @@ bot.command("setarenaimg", async (ctx) => {
   }
   pendingUploads.set(ctx.chat.id, { type: "arena", key });
   ctx.reply(`Envie a imagem do brasão de arena *${key}* agora.`, { parse_mode: "Markdown" });
+});
+
+bot.command("setvipimg", async (ctx) => {
+  if (!isAdmin(ctx.from.id)) return ctx.reply("🚫 Apenas admin.");
+  const [, keyRaw] = ctx.message.text.split(" ");
+  const key = (keyRaw || "").toLowerCase();
+  if (!VIP_IMG_KEYS.includes(key)) {
+    return ctx.reply(`Use /setvipimg <${VIP_IMG_KEYS.join("|")}>`);
+  }
+  pendingUploads.set(ctx.chat.id, { type: "vip", key });
+  ctx.reply(`Envie a imagem de VIP *${key}* agora.`, { parse_mode: "Markdown" });
 });
 
 bot.command("setshopimg", async (ctx) => {
@@ -973,6 +985,17 @@ bot.on("photo", async (ctx) => {
     EVENT_IMAGES[pending.key] = fileId;
     updated = true;
   } else if (pending.type === "arena") {
+    await pool.query(
+      `
+      INSERT INTO event_images (event_key, file_id, updated_at)
+      VALUES ($1, $2, NOW())
+      ON CONFLICT (event_key) DO UPDATE SET file_id = EXCLUDED.file_id, updated_at = NOW()
+    `,
+      [pending.key, fileId]
+    );
+    EVENT_IMAGES[pending.key] = fileId;
+    updated = true;
+  } else if (pending.type === "vip") {
     await pool.query(
       `
       INSERT INTO event_images (event_key, file_id, updated_at)
