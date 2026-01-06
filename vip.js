@@ -137,9 +137,12 @@ export function registerVip({ bot, app, deps }) {
         `
         UPDATE players
         SET tofus = tofus - $1,
-            vip_until = GREATEST(COALESCE(vip_until, NOW()), NOW()) + INTERVAL '30 days'
+            vip_until = GREATEST(COALESCE(vip_until, NOW()), NOW()) + INTERVAL '30 days',
+            energy_max = GREATEST(energy_max, 40),
+            inventory_slots_max = GREATEST(inventory_slots_max, 30),
+            energy = LEAST(energy, GREATEST(energy_max, 40))
         WHERE id = $2 AND tofus >= $1
-        RETURNING vip_until, tofus
+        RETURNING vip_until, tofus, energy_max, inventory_slots_max, energy
       `,
         [VIP_COST, player.id]
       );
@@ -180,7 +183,13 @@ export function registerVip({ bot, app, deps }) {
           console.warn("MP webhook sem paymentId", { query: req.query, body: req.body });
           return res.sendStatus(200);
         }
-        const payment = await fetchPayment(paymentId);
+        let payment;
+        try {
+          payment = await fetchPayment(paymentId);
+        } catch (err) {
+          // Ignora notificações com id inválido
+          return res.sendStatus(200);
+        }
         if (!payment) return res.sendStatus(200);
         if (payment.status !== "approved" || payment.currency_id !== "BRL") {
           return res.sendStatus(200);

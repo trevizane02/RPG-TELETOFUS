@@ -186,6 +186,7 @@ function makeBar(current, max, size = 10) {
 }
 
 async function regenEnergy(player) {
+  if (!player) return player;
   const now = new Date();
   const last = player.last_energy_at ? new Date(player.last_energy_at) : new Date();
   const diffMin = Math.floor((now - last) / 60000);
@@ -205,6 +206,42 @@ async function regenEnergy(player) {
     await pool.query("UPDATE players SET last_energy_at = NOW() WHERE id = $1", [player.id]);
     player.last_energy_at = new Date();
   }
+  return player;
+}
+
+async function applyVipBenefits(player) {
+  const vipActive = isVip(player);
+  const targetEnergy = vipActive ? 40 : 20;
+  const targetInv = vipActive ? 30 : 20;
+  const setClauses = [];
+  const values = [];
+  let idx = 1;
+
+  if (player.energy_max !== targetEnergy) {
+    setClauses.push(`energy_max = $${idx++}`);
+    values.push(targetEnergy);
+    player.energy_max = targetEnergy;
+  }
+
+  const clampedEnergy = Math.min(targetEnergy, player.energy || 0);
+  if (clampedEnergy !== player.energy) {
+    setClauses.push(`energy = $${idx++}`);
+    values.push(clampedEnergy);
+    player.energy = clampedEnergy;
+  }
+
+  if (player.inventory_slots_max !== targetInv) {
+    setClauses.push(`inventory_slots_max = $${idx++}`);
+    values.push(targetInv);
+    player.inventory_slots_max = targetInv;
+  }
+
+  if (setClauses.length) {
+    setClauses.push(`updated_at = NOW()`);
+    values.push(player.id);
+    await pool.query(`UPDATE players SET ${setClauses.join(", ")} WHERE id = $${idx}`, values);
+  }
+
   return player;
 }
 
@@ -240,6 +277,7 @@ async function getPlayer(telegramId, name = "Aventureiro") {
     const updated = await pool.query("SELECT * FROM players WHERE id = $1", [player.id]);
     player = updated.rows[0];
   }
+  player = await applyVipBenefits(player);
   await pool.query("UPDATE players SET last_seen = NOW() WHERE id = $1", [player.id]);
   return player;
 }
@@ -306,6 +344,20 @@ async function applyDeathPenalty(player) {
 
 function isAdmin(userId) {
   return ADMIN_IDS.has(String(userId));
+}
+
+function isVip(player) {
+  if (!player?.vip_until) return false;
+  return new Date(player.vip_until).getTime() > Date.now();
+}
+
+function formatDateShort(dt) {
+  if (!dt) return "-";
+  const d = new Date(dt);
+  const day = String(d.getDate()).padStart(2, "0");
+  const mon = String(d.getMonth() + 1).padStart(2, "0");
+  const yr = d.getFullYear();
+  return `${day}/${mon}/${yr}`;
 }
 
 function getActiveBuff(player) {
@@ -1041,6 +1093,9 @@ async function renderMenu(ctx) {
 
   await setPlayerState(player.id, STATES.MENU);
 
+  const vipActive = isVip(player);
+  const vipLine = vipActive ? `🪪 VIP até ${formatDateShort(player.vip_until)}` : "🪪 Status: Free";
+
   const captionLines = [
     `🏰 *${map.name}* (Lv ${map.level_min})`,
     `👥 Online (últimos ${ONLINE_WINDOW_MINUTES} min): ${online.total}`,
@@ -1049,7 +1104,7 @@ async function renderMenu(ctx) {
     `❤️ HP: ${player.hp}/${stats.total_hp} ${makeBar(player.hp, stats.total_hp, 8)}`,
     `⚡ Energia: ${player.energy}/${player.energy_max} ${makeGreenBar(player.energy, player.energy_max, 8)} (regen a cada ${REGEN_MINUTES} min)`,
     `🗝️ Chaves de Masmorra: ${dungeonKeys}`,
-    `🏅 Arena coins: ${player.arena_coins || 0}`,
+    vipLine,
     buff && (buff.atk || buff.def || buff.crit)
       ? `🧪 Buff ativo: +${buff.atk || 0} ATK / +${buff.def || 0} DEF / +${buff.crit || 0}% CRIT (${formatBuffRemaining(player.temp_buff_expires_at) || "até acabar"})`
       : "",
