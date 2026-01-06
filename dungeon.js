@@ -21,6 +21,7 @@ export function registerDungeon(bot, deps) {
 
   const sessions = new Map(); // code -> session
   const exitConfirmations = new Map(); // userId -> expires
+  const pendingPasswords = new Map(); // userId -> { mode: 'create'|'join', code?, digits: '' }
 
   const TURN_TIMEOUT = 20000;
   const ACTION_ICONS = {
@@ -115,7 +116,7 @@ export function registerDungeon(bot, deps) {
 
   function dungeonMenuKeyboard() {
     return Markup.inlineKeyboard([
-      [Markup.button.callback("➕ Criar sala", "d_menu_create")],
+      [Markup.button.callback("➕ Criar sala", "d_create_options")],
       [Markup.button.callback("🔍 Buscar salas", "d_menu_browse")],
       [Markup.button.callback("🏠 Menu", "menu")],
     ]).reply_markup;
@@ -129,6 +130,7 @@ export function registerDungeon(bot, deps) {
     }
     return `🗝️ ${session.name}
 Mapa: ${session.mapName}
+Senha: ${session.password ? "definida" : "nenhuma"}
 Membros (${session.members.size}/5):
 ${lines.join("\n")}
 Comandos: Pronto/Despronto, Iniciar (líder)`;
@@ -145,7 +147,7 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
     }
   }
 
-  async function createSession(ctx) {
+  async function createSession(ctx, password = null) {
     const base = await ensureSession(ctx);
     if (!base) return;
     const code = genCode();
@@ -159,6 +161,7 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
       ownerId: String(ctx.from.id),
       members: new Set([String(ctx.from.id)]),
       memberData: new Map(),
+      password,
       state: "lobby",
       currentFloor: 0,
       floors: [],
@@ -180,7 +183,7 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
     await sendLobby(session);
   }
 
-  async function joinSession(ctx, code) {
+  async function joinSession(ctx, code, password = null) {
     const session = sessions.get(code);
     if (!session) {
       await ctx.reply("Sala não encontrada.");
@@ -192,6 +195,10 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
     }
     if (session.members.size >= 5) {
       await ctx.reply("Sala cheia.");
+      return;
+    }
+    if (session.password && session.password !== password) {
+      await ctx.reply("Sala protegida. Use /dungeon_join <código> <senha> ou clique novamente e digite a senha.");
       return;
     }
     const userId = String(ctx.from.id);
@@ -650,12 +657,45 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
     if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
   });
 
+  function pwdKeyboard(currentDigits = "", backAction = "dungeon_menu") {
+    const label = currentDigits.padEnd(4, "_");
+    const rows = [
+      [Markup.button.callback("1", "d_pwd_digit:1"), Markup.button.callback("2", "d_pwd_digit:2"), Markup.button.callback("3", "d_pwd_digit:3")],
+      [Markup.button.callback("4", "d_pwd_digit:4"), Markup.button.callback("5", "d_pwd_digit:5"), Markup.button.callback("6", "d_pwd_digit:6")],
+      [Markup.button.callback("7", "d_pwd_digit:7"), Markup.button.callback("8", "d_pwd_digit:8"), Markup.button.callback("9", "d_pwd_digit:9")],
+      [Markup.button.callback("0", "d_pwd_digit:0"), Markup.button.callback("⬅️ Sair", backAction)],
+    ];
+    return { label, keyboard: rows };
+  }
+
+  function resetPwd(userId) {
+    pendingPasswords.delete(userId);
+  }
+
   bot.command("dungeon_create", async (ctx) => {
     await createSession(ctx);
   });
 
-  bot.action("d_menu_create", async (ctx) => {
+  bot.action("d_create_options", async (ctx) => {
+    const kb = Markup.inlineKeyboard([
+      [Markup.button.callback("🔓 Aberta", "d_create_open")],
+      [Markup.button.callback("🔒 Com senha", "d_create_pwd")],
+      [Markup.button.callback("🏠 Menu", "dungeon_menu")],
+    ]).reply_markup;
+    await ctx.reply("Como deseja criar a sala?", { reply_markup: kb });
+    if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
+  });
+
+  bot.action("d_create_open", async (ctx) => {
     await createSession(ctx);
+    if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
+  });
+
+  bot.action("d_create_pwd", async (ctx) => {
+    const userId = String(ctx.from.id);
+    pendingPasswords.set(userId, { mode: "create", digits: "" });
+    const pad = pwdKeyboard("", "dungeon_menu");
+    await ctx.reply(`Defina a senha (4 dígitos)\nSenha: ${pad.label}`, { reply_markup: Markup.inlineKeyboard(pad.keyboard).reply_markup });
     if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
   });
 
@@ -671,16 +711,21 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
       if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
       return;
     }
-    const buttons = available.map((s) => [Markup.button.callback(`${s.name} | ${s.members.size}/5 | ${s.code}`, `d_join:${s.code}`)]);
+    const buttons = available.map((s) => {
+      const label = `${s.password ? "🔒 " : ""}${s.name} | ${s.members.size}/5 | ${s.code}`;
+      return [Markup.button.callback(label, `d_join:${s.code}`)];
+    });
     buttons.push([Markup.button.callback("⬅️ Voltar", "dungeon_menu")]);
     await ctx.reply("Salas disponíveis:", { reply_markup: Markup.inlineKeyboard(buttons).reply_markup });
     if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
   });
 
   bot.command("dungeon_join", async (ctx) => {
-    const [, code] = (ctx.message.text || "").split(" ");
-    if (!code) return ctx.reply("Use /dungeon_join <código>");
-    await joinSession(ctx, code.trim().toUpperCase());
+    const parts = (ctx.message.text || "").split(" ").filter(Boolean);
+    const code = parts[1];
+    const pwd = parts[2] || null;
+    if (!code) return ctx.reply("Use /dungeon_join <código> [senha]");
+    await joinSession(ctx, code.trim().toUpperCase(), pwd);
   });
 
   bot.action("d_menu_join", async (ctx) => {
@@ -690,8 +735,62 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
 
   bot.action(/^d_join:(.+)$/, async (ctx) => {
     const code = ctx.match[1];
+    const session = sessions.get(code);
+    if (session?.password) {
+      const userId = String(ctx.from.id);
+      pendingPasswords.set(userId, { mode: "join", code, digits: "" });
+      const pad = pwdKeyboard("", "dungeon_menu");
+      await ctx.reply(`Sala protegida.\nDigite a senha para entrar\nSenha: ${pad.label}`, { reply_markup: Markup.inlineKeyboard(pad.keyboard).reply_markup });
+      if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
+      return;
+    }
     await joinSession(ctx, code);
     if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
+  });
+
+  bot.action(/d_pwd_digit:(\d)/, async (ctx) => {
+    const digit = ctx.match[1];
+    const userId = String(ctx.from.id);
+    const pending = pendingPasswords.get(userId);
+    if (!pending) {
+      await ctx.answerCbQuery("Nenhuma senha em andamento").catch(() => {});
+      return;
+    }
+    const digits = (pending.digits || "") + digit;
+    if (digits.length < 4) {
+      pending.digits = digits;
+      pendingPasswords.set(userId, pending);
+      const pad = pwdKeyboard(digits, "dungeon_menu");
+      await ctx.editMessageText(`Senha: ${pad.label}`, { reply_markup: Markup.inlineKeyboard(pad.keyboard).reply_markup }).catch(async () => {
+        await ctx.reply(`Senha: ${pad.label}`, { reply_markup: Markup.inlineKeyboard(pad.keyboard).reply_markup });
+      });
+      await ctx.answerCbQuery().catch(() => {});
+      return;
+    }
+    // complete
+    pending.digits = digits.slice(0, 4);
+    const code = pending.code;
+    const mode = pending.mode;
+    resetPwd(userId);
+    if (mode === "create") {
+      await createSession(ctx, pending.digits);
+      await ctx.answerCbQuery("Sala criada com senha").catch(() => {});
+      return;
+    }
+    if (mode === "join" && code) {
+      const session = sessions.get(code);
+      if (!session) {
+        await ctx.reply("Sala não encontrada.").catch(() => {});
+        return;
+      }
+      if (session.password !== pending.digits) {
+        await ctx.reply("Senha incorreta.").catch(() => {});
+        return;
+      }
+      await joinSession(ctx, code, pending.digits);
+      await ctx.answerCbQuery("Entrou na sala").catch(() => {});
+      return;
+    }
   });
 
   bot.action(/^d_ready:(.+)$/, async (ctx) => {
