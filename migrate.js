@@ -333,6 +333,20 @@ export async function migrate() {
       `);
 
       await client.query(`
+        CREATE TABLE IF NOT EXISTS payments (
+          id SERIAL PRIMARY KEY,
+          payment_id TEXT UNIQUE NOT NULL,
+          gateway TEXT NOT NULL,
+          amount_brl NUMERIC(10,2) NOT NULL DEFAULT 0,
+          tofus INT NOT NULL DEFAULT 0,
+          telegram_id TEXT,
+          status TEXT,
+          raw_payload JSONB,
+          created_at TIMESTAMPTZ DEFAULT now()
+        );
+      `);
+
+      await client.query(`
         CREATE TABLE IF NOT EXISTS arena_chests (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           player_id UUID REFERENCES players(id) ON DELETE CASCADE,

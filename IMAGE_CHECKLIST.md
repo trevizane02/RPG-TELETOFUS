@@ -7,6 +7,7 @@ Guia rápido de upload:
 - Eventos/capas: `/seteventimg <chest|trap|merchant|loot_gold|loot_item|dungeon_plains|dungeon_forest|dungeon_swamp|dungeon_special>`.
 - Arena (brasões): `/setarenaimg <arena_rank_sangue_novo|arena_rank_desafiador|arena_rank_veterano|arena_rank_campeao|arena_rank_lenda>`.
 - Arena (capas): `arena_cover`, `arena_ranks_cover`, `arena_chests_cover`.
+- VIP/Tofus: use `/seteventimg vip_cover`, `/seteventimg vip_tofus_cover`, `/seteventimg vip_buy_cover`.
 - Lojas: `/setshopimg <main|vila|matadores|castelo>`.
 
 ## Mapas
@@ -116,6 +117,10 @@ Guia rápido de upload:
   - [ ] arena_cover | Capa do menu da Arena
   - [ ] arena_ranks_cover | Capa da tela de ranks
   - [ ] arena_chests_cover | Capa da tela de tesouros
+- VIP / Tofus
+  - [ ] vip_cover | Capa do menu VIP
+  - [ ] vip_tofus_cover | Capa da loja de Tofus (PIX/MP)
+  - [ ] vip_buy_cover | Capa da compra de VIP
 
 ## Lojas
 - [ok] shop_main | Capa do menu de lojas

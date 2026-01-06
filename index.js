@@ -7,6 +7,7 @@ import { registerDungeon } from "./dungeon.js";
 import { registerTrade } from "./trade.js";
 import { registerEventRewards } from "./event_rewards.js";
 import { registerArena } from "./arena.js";
+import { registerVip } from "./vip.js";
 
 // --------------------------------------
 // Bootstrap HTTP (health) + migrations
@@ -2327,9 +2328,17 @@ bot.action(/^shop_sell_do:([A-Za-z0-9_-]+):(\d+)$/, async (ctx) => {
   if (ctx.callbackQuery) ctx.answerCbQuery().catch(() => {});
 });
 
-bot.action("vip", async (ctx) => {
-  await ctx.reply("💎 VIP em breve.", Markup.inlineKeyboard([[Markup.button.callback("🏠 Menu", "menu")]]));
-  if (ctx.callbackQuery) ctx.answerCbQuery();
+// VIP / Tofus
+registerVip({
+  bot,
+  app,
+  deps: {
+    pool,
+    getPlayer,
+    setPlayerState,
+    sendCard,
+    STATES,
+  },
 });
 
 // Registra dungeons (co-op)
