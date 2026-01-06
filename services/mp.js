@@ -69,6 +69,11 @@ export async function createPixPayment({ telegramId, pack }) {
       transaction_amount: info.price,
       description: `Pacote ${info.qty} Tofus`,
       payment_method_id: "pix",
+      payer: {
+        email: `${telegramId}@pix.local`,
+        first_name: "Telegram",
+        last_name: String(telegramId),
+      },
       external_reference: JSON.stringify({ telegramId, pack }),
       notification_url,
     },
