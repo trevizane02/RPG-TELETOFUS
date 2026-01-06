@@ -888,7 +888,6 @@ const ARENA_RANK_IMG_KEYS = [
   "arena_chests_cover",
 ];
 const VIP_IMG_KEYS = ["vip_cover", "vip_tofus_cover", "vip_buy_cover", "vip_chest_cover"];
-const VIP_IMG_KEYS = ["vip_cover", "vip_tofus_cover", "vip_buy_cover"];
 
 bot.command("seteventimg", async (ctx) => {
   if (!isAdmin(ctx.from.id)) return ctx.reply("🚫 Apenas admin.");
