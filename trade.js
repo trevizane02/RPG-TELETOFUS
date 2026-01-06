@@ -40,8 +40,8 @@ export function registerTrade(bot, deps) {
     if (item.hp) stats.push(`HP ${item.hp}`);
     if (item.crit) stats.push(`CRIT ${item.crit}`);
     const statsText = stats.length ? ` - ${stats.join(" / ")}` : "";
-    const qtyText = `x${item.qty}`;
-    return `${icon} ${item.name}${statsText} (${qtyText})`;
+    const qtyText = item.type === "equip" ? "" : ` (x${item.qty})`;
+    return `${icon} ${item.name}${statsText}${qtyText}`;
   }
 
   function findTradeByUser(userId) {
@@ -64,26 +64,36 @@ export function registerTrade(bot, deps) {
 
   async function renderTradeInventory(ctx, session, userId, page = 1) {
     const player = await getPlayer(userId, ctx.from.first_name);
-    const res = await pool.query(
+    const equipablesRes = await pool.query(
       `
-      SELECT inv.item_key, SUM(inv.qty) as qty, i.name, i.rarity, i.slot,
-             MAX(inv.rolled_atk) as atk, MAX(inv.rolled_def) as def, MAX(inv.rolled_hp) as hp, MAX(inv.rolled_crit) as crit
+      SELECT inv.id, inv.item_key, inv.qty, inv.rolled_atk AS atk, inv.rolled_def AS def, inv.rolled_hp AS hp, inv.rolled_crit AS crit, inv.rolled_rarity,
+             i.name, i.rarity, i.slot
       FROM inventory inv
       JOIN items i ON i.key = inv.item_key
-      WHERE inv.player_id = $1 AND inv.qty > 0 AND inv.equipped = FALSE
-      GROUP BY inv.item_key, i.name, i.rarity, i.slot
-      ORDER BY i.slot ASC, i.rarity DESC, i.name ASC
+      WHERE inv.player_id = $1 AND inv.qty > 0 AND inv.equipped = FALSE AND i.slot <> 'consumable'
+      ORDER BY i.slot ASC, i.rarity DESC, i.name ASC, inv.id ASC
     `,
       [player.id]
     );
-    const items = res.rows;
-    // adiciona opções de moedas
-    if (player.gold > 0) {
-      items.push({ item_key: "__gold", qty: player.gold, name: "Gold", rarity: "moeda", slot: "currency" });
-    }
-    if ((player.tofus || 0) > 0) {
-      items.push({ item_key: "__tofus", qty: player.tofus, name: "Tofus", rarity: "moeda", slot: "currency" });
-    }
+    const consumablesRes = await pool.query(
+      `
+      SELECT inv.item_key, SUM(inv.qty)::int AS qty, i.name, i.rarity, i.slot
+      FROM inventory inv
+      JOIN items i ON i.key = inv.item_key
+      WHERE inv.player_id = $1 AND inv.qty > 0 AND inv.equipped = FALSE AND i.slot = 'consumable'
+      GROUP BY inv.item_key, i.name, i.rarity, i.slot
+      ORDER BY i.rarity DESC, i.name ASC
+    `,
+      [player.id]
+    );
+
+    const items = [
+      ...equipablesRes.rows.map((r) => ({ ...r, type: "equip", invId: r.id, qty: 1 })),
+      ...consumablesRes.rows.map((r) => ({ ...r, type: "cons" })),
+    ];
+    if (player.gold > 0) items.push({ item_key: "__gold", qty: player.gold, name: "Gold", rarity: "moeda", slot: "currency", type: "currency" });
+    if ((player.tofus || 0) > 0) items.push({ item_key: "__tofus", qty: player.tofus, name: "Tofus", rarity: "moeda", slot: "currency", type: "currency" });
+
     if (items.length === 0) {
       await sendCard(ctx, { caption: "Mochila vazia.", keyboard: [[Markup.button.callback("🏠 Menu", "menu")]] });
       if (ctx.callbackQuery) ctx.answerCbQuery();
@@ -94,9 +104,12 @@ export function registerTrade(bot, deps) {
     const pageNum = Math.min(totalPages, Math.max(1, Number(page) || 1));
     const slice = items.slice((pageNum - 1) * perPage, pageNum * perPage);
 
-    const kb = slice.map((i) => [
-      Markup.button.callback(formatTradeItemLabel(i), `trade_offer_pick_${i.item_key}_p_${pageNum}`),
-    ]);
+    const kb = slice.map((i) => {
+      if (i.type === "equip") {
+        return [Markup.button.callback(formatTradeItemLabel(i), `trade_offer_pick_item_${i.invId}_p_${pageNum}`)];
+      }
+      return [Markup.button.callback(formatTradeItemLabel(i), `trade_offer_pick_cons_${i.item_key}_p_${pageNum}`)];
+    });
     const nav = [];
     if (pageNum > 1) nav.push(Markup.button.callback("⬅️", `trade_offer_page_${pageNum - 1}`));
     if (pageNum < totalPages) nav.push(Markup.button.callback("➡️", `trade_offer_page_${pageNum + 1}`));
@@ -153,6 +166,30 @@ export function registerTrade(bot, deps) {
       if (!offer) return "Nenhuma";
       if (offer.item_key === "__gold") return `Gold x${offer.qty}`;
       if (offer.item_key === "__tofus") return `Tofus x${offer.qty}`;
+
+      if (offer.invIds?.length) {
+        const itemRes = await pool.query(
+          `
+          SELECT 
+            inv.rolled_atk, inv.rolled_def, inv.rolled_hp, inv.rolled_crit, inv.rolled_rarity,
+            i.name, i.rarity
+          FROM inventory inv
+          JOIN items i ON i.key = inv.item_key
+          WHERE inv.id = ANY($1::uuid[])
+          LIMIT 1
+        `,
+          [offer.invIds]
+        );
+        if (!itemRes.rows.length) return "Item indisponível";
+        const item = itemRes.rows[0];
+        const rolled = [];
+        if (item.rolled_atk) rolled.push(`ATK+${item.rolled_atk}`);
+        if (item.rolled_def) rolled.push(`DEF+${item.rolled_def}`);
+        if (item.rolled_hp) rolled.push(`HP+${item.rolled_hp}`);
+        if (item.rolled_crit) rolled.push(`CRIT+${item.rolled_crit}`);
+        const statsText = rolled.length ? ` (${rolled.join(", ")})` : "";
+        return `${item.name}${statsText}`;
+      }
       
       // Busca um item exemplo com stats
       const itemRes = await pool.query(`
@@ -288,11 +325,9 @@ export function registerTrade(bot, deps) {
     await renderTradeInventory(ctx, found.session, userId, page);
   });
 
-  bot.action(/trade_offer_pick_(.+)/, async (ctx) => {
-    const payload = ctx.match[1];
-    const last = payload.lastIndexOf("_p_");
-    const itemKey = last >= 0 ? payload.slice(0, last) : payload;
-    const page = last >= 0 ? Number(payload.slice(last + 3) || "1") : 1;
+  bot.action(/trade_offer_pick_item_([^_]+)_p_(\d+)/, async (ctx) => {
+    const invId = ctx.match[1];
+    const page = Number(ctx.match[2] || "1");
     const userId = String(ctx.from.id);
     const found = findTradeByUser(userId);
     if (!found) return ctx.answerCbQuery("Sem troca");
@@ -301,15 +336,43 @@ export function registerTrade(bot, deps) {
       await ctx.answerCbQuery("Expirou");
       return ctx.reply("Troca expirada.", Markup.inlineKeyboard([[Markup.button.callback("🏠 Menu", "menu")]]));
     }
-    const player = await getPlayer(userId);
-    let qty;
-    if (itemKey === "__gold") {
-      qty = player.gold || 0;
-    } else if (itemKey === "__tofus") {
-      qty = player.tofus || 0;
-    } else {
-      qty = await getItemQty(player.id, itemKey);
+    const invRow = await pool.query(
+      `
+      SELECT inv.id, inv.item_key, inv.rolled_atk, inv.rolled_def, inv.rolled_hp, inv.rolled_crit, i.name
+      FROM inventory inv
+      JOIN items i ON i.key = inv.item_key
+      WHERE inv.id = $1 AND inv.player_id = (SELECT id FROM players WHERE telegram_id = $2) AND inv.equipped = FALSE
+      LIMIT 1
+    `,
+      [invId, userId]
+    );
+    if (!invRow.rows.length) {
+      await ctx.answerCbQuery("Item indisponível", { show_alert: true });
+      return renderTradeInventory(ctx, found.session, userId, page);
     }
+    const side = found.session.ownerId === userId ? "owner" : "guest";
+    found.session.offers[side] = { item_key: invRow.rows[0].item_key, qty: 1, invIds: [invId], type: "equip" };
+    found.session.confirmed = { owner: false, guest: false };
+    await ctx.answerCbQuery("Oferta salva");
+    await renderTrade(ctx, found.session);
+  });
+
+  bot.action(/trade_offer_pick_cons_(.+)_p_(\d+)/, async (ctx) => {
+    const itemKey = ctx.match[1];
+    const page = Number(ctx.match[2] || "1");
+    const userId = String(ctx.from.id);
+    const found = findTradeByUser(userId);
+    if (!found) return ctx.answerCbQuery("Sem troca");
+    if (found.session.expires < Date.now()) {
+      tradeSessions.delete(found.code);
+      await ctx.answerCbQuery("Expirou");
+      return ctx.reply("Troca expirada.", Markup.inlineKeyboard([[Markup.button.callback("🏠 Menu", "menu")]]));
+    }
+    const player = await getPlayer(userId, ctx.from.first_name);
+    let qty;
+    if (itemKey === "__gold") qty = player.gold || 0;
+    else if (itemKey === "__tofus") qty = player.tofus || 0;
+    else qty = await getAvailableQty(player.id, itemKey);
     if (qty <= 0) {
       await ctx.answerCbQuery("Sem estoque");
       return renderTradeInventory(ctx, found.session, userId, page);
@@ -506,7 +569,16 @@ export function registerTrade(bot, deps) {
         session.confirmed = { owner: false, guest: false };
         return ctx.answerCbQuery("Dono sem tofus suficiente.");
       }
-      if (ownerOffer && !["__gold","__tofus"].includes(ownerOffer.item_key) && ((await getAvailableQty(owner.id, ownerOffer.item_key)) < ownerOffer.qty)) {
+      if (ownerOffer && ownerOffer.invIds?.length) {
+        const check = await pool.query(
+          "SELECT COUNT(*)::int AS c FROM inventory WHERE player_id = $1 AND id = ANY($2::uuid[]) AND equipped = FALSE",
+          [owner.id, ownerOffer.invIds]
+        );
+        if (Number(check.rows[0]?.c || 0) < ownerOffer.invIds.length) {
+          session.confirmed = { owner: false, guest: false };
+          return ctx.answerCbQuery("Dono sem item suficiente.");
+        }
+      } else if (ownerOffer && !["__gold","__tofus"].includes(ownerOffer.item_key) && ((await getAvailableQty(owner.id, ownerOffer.item_key)) < ownerOffer.qty)) {
         session.confirmed = { owner: false, guest: false };
         return ctx.answerCbQuery("Dono sem item suficiente.");
       }
@@ -518,7 +590,16 @@ export function registerTrade(bot, deps) {
         session.confirmed = { owner: false, guest: false };
         return ctx.answerCbQuery("Convidado sem tofus suficiente.");
       }
-      if (guestOffer && !["__gold","__tofus"].includes(guestOffer.item_key) && ((await getAvailableQty(guest.id, guestOffer.item_key)) < guestOffer.qty)) {
+      if (guestOffer && guestOffer.invIds?.length) {
+        const check = await pool.query(
+          "SELECT COUNT(*)::int AS c FROM inventory WHERE player_id = $1 AND id = ANY($2::uuid[]) AND equipped = FALSE",
+          [guest.id, guestOffer.invIds]
+        );
+        if (Number(check.rows[0]?.c || 0) < guestOffer.invIds.length) {
+          session.confirmed = { owner: false, guest: false };
+          return ctx.answerCbQuery("Convidado sem item suficiente.");
+        }
+      } else if (guestOffer && !["__gold","__tofus"].includes(guestOffer.item_key) && ((await getAvailableQty(guest.id, guestOffer.item_key)) < guestOffer.qty)) {
         session.confirmed = { owner: false, guest: false };
         return ctx.answerCbQuery("Convidado sem item suficiente.");
       }
@@ -554,7 +635,26 @@ export function registerTrade(bot, deps) {
         await pool.query("UPDATE players SET tofus = tofus + $1 WHERE id = $2", [ownerOffer.qty, guest.id]);
       } else if (ownerOffer) {
         const itemRow = await getItemRow(ownerOffer.item_key);
-        if (itemRow?.slot === "consumable") {
+        if (ownerOffer.invIds?.length && itemRow?.slot !== "consumable") {
+          const ownerItemsRes = await pool.query(
+            `
+            SELECT id, item_key, slot, rolled_atk, rolled_def, rolled_hp, rolled_crit, rolled_rarity
+            FROM inventory
+            WHERE player_id = $1 AND id = ANY($2::uuid[]) AND equipped = FALSE
+          `,
+            [owner.id, ownerOffer.invIds]
+          );
+          for (const item of ownerItemsRes.rows) {
+            await pool.query("DELETE FROM inventory WHERE id = $1", [item.id]);
+            await pool.query(
+              `
+              INSERT INTO inventory (player_id, item_key, slot, qty, rolled_atk, rolled_def, rolled_hp, rolled_crit, rolled_rarity, equipped)
+              VALUES ($1, $2, $3, 1, $4, $5, $6, $7, $8, FALSE)
+            `,
+              [guest.id, item.item_key, item.slot, item.rolled_atk, item.rolled_def, item.rolled_hp, item.rolled_crit, item.rolled_rarity]
+            );
+          }
+        } else if (itemRow?.slot === "consumable") {
           const srcRow = await pool.query(
             "SELECT id, qty FROM inventory WHERE player_id = $1 AND item_key = $2 AND slot = 'consumable' AND equipped = FALSE LIMIT 1",
             [owner.id, ownerOffer.item_key]
@@ -603,7 +703,26 @@ export function registerTrade(bot, deps) {
         await pool.query("UPDATE players SET tofus = tofus + $1 WHERE id = $2", [guestOffer.qty, owner.id]);
       } else if (guestOffer) {
         const itemRow = await getItemRow(guestOffer.item_key);
-        if (itemRow?.slot === "consumable") {
+        if (guestOffer.invIds?.length && itemRow?.slot !== "consumable") {
+          const guestItemsRes = await pool.query(
+            `
+            SELECT id, item_key, slot, rolled_atk, rolled_def, rolled_hp, rolled_crit, rolled_rarity
+            FROM inventory
+            WHERE player_id = $1 AND id = ANY($2::uuid[]) AND equipped = FALSE
+          `,
+            [guest.id, guestOffer.invIds]
+          );
+          for (const item of guestItemsRes.rows) {
+            await pool.query("DELETE FROM inventory WHERE id = $1", [item.id]);
+            await pool.query(
+              `
+              INSERT INTO inventory (player_id, item_key, slot, qty, rolled_atk, rolled_def, rolled_hp, rolled_crit, rolled_rarity, equipped)
+              VALUES ($1, $2, $3, 1, $4, $5, $6, $7, $8, FALSE)
+            `,
+              [owner.id, item.item_key, item.slot, item.rolled_atk, item.rolled_def, item.rolled_hp, item.rolled_crit, item.rolled_rarity]
+            );
+          }
+        } else if (itemRow?.slot === "consumable") {
           const srcRow = await pool.query(
             "SELECT id, qty FROM inventory WHERE player_id = $1 AND item_key = $2 AND slot = 'consumable' AND equipped = FALSE LIMIT 1",
             [guest.id, guestOffer.item_key]

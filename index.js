@@ -824,6 +824,9 @@ const ARENA_RANK_IMG_KEYS = [
   "arena_rank_veterano",
   "arena_rank_campeao",
   "arena_rank_lenda",
+  "arena_cover",
+  "arena_ranks_cover",
+  "arena_chests_cover",
 ];
 
 bot.command("seteventimg", async (ctx) => {
