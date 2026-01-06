@@ -70,7 +70,7 @@ export async function createPixPayment({ telegramId, pack }) {
       description: `Pacote ${info.qty} Tofus`,
       payment_method_id: "pix",
       payer: {
-        email: `${telegramId}@pix.local`,
+        email: `tg-${telegramId}@example.com`,
         first_name: "Telegram",
         last_name: String(telegramId),
       },
