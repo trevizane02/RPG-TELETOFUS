@@ -6,6 +6,23 @@ export function registerTrade(bot, deps) {
   const tradeSessions = new Map(); // code -> trade session
   const pendingQty = new Map(); // userId -> { itemKey, page }
   const pendingTradeJoin = new Set(); // userIds aguardando código via prompt
+  const itemCache = new Map(); // item_key -> row
+
+  async function getItemRow(key) {
+    if (itemCache.has(key)) return itemCache.get(key);
+    const res = await pool.query("SELECT * FROM items WHERE key = $1", [key]);
+    const row = res.rows[0] || null;
+    itemCache.set(key, row);
+    return row;
+  }
+
+  async function getAvailableQty(playerId, itemKey) {
+    const res = await pool.query(
+      "SELECT COALESCE(SUM(qty),0)::int AS qty FROM inventory WHERE player_id = $1 AND item_key = $2 AND equipped = FALSE",
+      [playerId, itemKey]
+    );
+    return Number(res.rows[0]?.qty || 0);
+  }
 
   function formatTradeItemLabel(item) {
     const rarityIcon = {
@@ -53,7 +70,7 @@ export function registerTrade(bot, deps) {
              MAX(inv.rolled_atk) as atk, MAX(inv.rolled_def) as def, MAX(inv.rolled_hp) as hp, MAX(inv.rolled_crit) as crit
       FROM inventory inv
       JOIN items i ON i.key = inv.item_key
-      WHERE inv.player_id = $1 AND inv.qty > 0
+      WHERE inv.player_id = $1 AND inv.qty > 0 AND inv.equipped = FALSE
       GROUP BY inv.item_key, i.name, i.rarity, i.slot
       ORDER BY i.slot ASC, i.rarity DESC, i.name ASC
     `,
@@ -330,7 +347,7 @@ export function registerTrade(bot, deps) {
     let stock;
     if (itemKey === "__gold") stock = player.gold || 0;
     else if (itemKey === "__tofus") stock = player.tofus || 0;
-    else stock = await getItemQty(player.id, itemKey);
+    else stock = await getAvailableQty(player.id, itemKey);
 
     if (qty < 1 || stock < qty) {
       await ctx.answerCbQuery("Quantidade inválida/sem estoque", { show_alert: true });
@@ -386,7 +403,7 @@ export function registerTrade(bot, deps) {
     let stock;
     if (pending.itemKey === "__gold") stock = player.gold || 0;
     else if (pending.itemKey === "__tofus") stock = player.tofus || 0;
-    else stock = await getItemQty(player.id, pending.itemKey);
+    else stock = await getAvailableQty(player.id, pending.itemKey);
 
     if (stock < qty) {
       await ctx.reply("Quantidade maior que o estoque.");
@@ -489,7 +506,7 @@ export function registerTrade(bot, deps) {
         session.confirmed = { owner: false, guest: false };
         return ctx.answerCbQuery("Dono sem tofus suficiente.");
       }
-      if (ownerOffer && !["__gold","__tofus"].includes(ownerOffer.item_key) && !(await hasItemQty(owner.id, ownerOffer.item_key, ownerOffer.qty))) {
+      if (ownerOffer && !["__gold","__tofus"].includes(ownerOffer.item_key) && ((await getAvailableQty(owner.id, ownerOffer.item_key)) < ownerOffer.qty)) {
         session.confirmed = { owner: false, guest: false };
         return ctx.answerCbQuery("Dono sem item suficiente.");
       }
@@ -501,7 +518,7 @@ export function registerTrade(bot, deps) {
         session.confirmed = { owner: false, guest: false };
         return ctx.answerCbQuery("Convidado sem tofus suficiente.");
       }
-      if (guestOffer && !["__gold","__tofus"].includes(guestOffer.item_key) && !(await hasItemQty(guest.id, guestOffer.item_key, guestOffer.qty))) {
+      if (guestOffer && !["__gold","__tofus"].includes(guestOffer.item_key) && ((await getAvailableQty(guest.id, guestOffer.item_key)) < guestOffer.qty)) {
         session.confirmed = { owner: false, guest: false };
         return ctx.answerCbQuery("Convidado sem item suficiente.");
       }
@@ -536,23 +553,45 @@ export function registerTrade(bot, deps) {
         await pool.query("UPDATE players SET tofus = tofus - $1 WHERE id = $2", [ownerOffer.qty, owner.id]);
         await pool.query("UPDATE players SET tofus = tofus + $1 WHERE id = $2", [ownerOffer.qty, guest.id]);
       } else if (ownerOffer) {
-        // Busca itens do owner com stats
-        const ownerItemsRes = await pool.query(`
-          SELECT id, item_key, slot, rolled_atk, rolled_def, rolled_hp, rolled_crit, rolled_rarity
-          FROM inventory
-          WHERE player_id = $1 AND item_key = $2 AND equipped = FALSE
-          LIMIT $3
-        `, [owner.id, ownerOffer.item_key, ownerOffer.qty]);
-        
-        for (const item of ownerItemsRes.rows) {
-          // Remove do owner
-          await pool.query('DELETE FROM inventory WHERE id = $1', [item.id]);
+        const itemRow = await getItemRow(ownerOffer.item_key);
+        if (itemRow?.slot === "consumable") {
+          const srcRow = await pool.query(
+            "SELECT id, qty FROM inventory WHERE player_id = $1 AND item_key = $2 AND slot = 'consumable' AND equipped = FALSE LIMIT 1",
+            [owner.id, ownerOffer.item_key]
+          );
+          const stack = srcRow.rows[0];
+          if (!stack || stack.qty < ownerOffer.qty) throw new Error("Stock mismatch");
+          const newQty = stack.qty - ownerOffer.qty;
+          if (newQty > 0) {
+            await pool.query("UPDATE inventory SET qty = $1 WHERE id = $2", [newQty, stack.id]);
+          } else {
+            await pool.query("DELETE FROM inventory WHERE id = $1", [stack.id]);
+          }
+          const up = await pool.query(
+            "UPDATE inventory SET qty = qty + $1 WHERE player_id = $2 AND item_key = $3 AND slot = 'consumable' AND equipped = FALSE RETURNING id",
+            [ownerOffer.qty, guest.id, ownerOffer.item_key]
+          );
+          if (!up.rows.length) {
+            await pool.query(
+              "INSERT INTO inventory (player_id, item_key, slot, qty, rolled_rarity, equipped) VALUES ($1, $2, 'consumable', $3, $4, FALSE)",
+              [guest.id, ownerOffer.item_key, ownerOffer.qty, itemRow.rarity || null]
+            );
+          }
+        } else {
+          const ownerItemsRes = await pool.query(`
+            SELECT id, item_key, slot, rolled_atk, rolled_def, rolled_hp, rolled_crit, rolled_rarity
+            FROM inventory
+            WHERE player_id = $1 AND item_key = $2 AND equipped = FALSE
+            LIMIT $3
+          `, [owner.id, ownerOffer.item_key, ownerOffer.qty]);
           
-          // Adiciona ao guest COM OS MESMOS STATS
-          await pool.query(`
-            INSERT INTO inventory (player_id, item_key, slot, qty, rolled_atk, rolled_def, rolled_hp, rolled_crit, rolled_rarity, equipped)
-            VALUES ($1, $2, $3, 1, $4, $5, $6, $7, $8, FALSE)
-          `, [guest.id, item.item_key, item.slot, item.rolled_atk, item.rolled_def, item.rolled_hp, item.rolled_crit, item.rolled_rarity]);
+          for (const item of ownerItemsRes.rows) {
+            await pool.query('DELETE FROM inventory WHERE id = $1', [item.id]);
+            await pool.query(`
+              INSERT INTO inventory (player_id, item_key, slot, qty, rolled_atk, rolled_def, rolled_hp, rolled_crit, rolled_rarity, equipped)
+              VALUES ($1, $2, $3, 1, $4, $5, $6, $7, $8, FALSE)
+            `, [guest.id, item.item_key, item.slot, item.rolled_atk, item.rolled_def, item.rolled_hp, item.rolled_crit, item.rolled_rarity]);
+          }
         }
       }
       
@@ -563,23 +602,45 @@ export function registerTrade(bot, deps) {
         await pool.query("UPDATE players SET tofus = tofus - $1 WHERE id = $2", [guestOffer.qty, guest.id]);
         await pool.query("UPDATE players SET tofus = tofus + $1 WHERE id = $2", [guestOffer.qty, owner.id]);
       } else if (guestOffer) {
-        // Busca itens do guest com stats
-        const guestItemsRes = await pool.query(`
-          SELECT id, item_key, slot, rolled_atk, rolled_def, rolled_hp, rolled_crit, rolled_rarity
-          FROM inventory
-          WHERE player_id = $1 AND item_key = $2 AND equipped = FALSE
-          LIMIT $3
-        `, [guest.id, guestOffer.item_key, guestOffer.qty]);
-        
-        for (const item of guestItemsRes.rows) {
-          // Remove do guest
-          await pool.query('DELETE FROM inventory WHERE id = $1', [item.id]);
+        const itemRow = await getItemRow(guestOffer.item_key);
+        if (itemRow?.slot === "consumable") {
+          const srcRow = await pool.query(
+            "SELECT id, qty FROM inventory WHERE player_id = $1 AND item_key = $2 AND slot = 'consumable' AND equipped = FALSE LIMIT 1",
+            [guest.id, guestOffer.item_key]
+          );
+          const stack = srcRow.rows[0];
+          if (!stack || stack.qty < guestOffer.qty) throw new Error("Stock mismatch");
+          const newQty = stack.qty - guestOffer.qty;
+          if (newQty > 0) {
+            await pool.query("UPDATE inventory SET qty = $1 WHERE id = $2", [newQty, stack.id]);
+          } else {
+            await pool.query("DELETE FROM inventory WHERE id = $1", [stack.id]);
+          }
+          const up = await pool.query(
+            "UPDATE inventory SET qty = qty + $1 WHERE player_id = $2 AND item_key = $3 AND slot = 'consumable' AND equipped = FALSE RETURNING id",
+            [guestOffer.qty, owner.id, guestOffer.item_key]
+          );
+          if (!up.rows.length) {
+            await pool.query(
+              "INSERT INTO inventory (player_id, item_key, slot, qty, rolled_rarity, equipped) VALUES ($1, $2, 'consumable', $3, $4, FALSE)",
+              [owner.id, guestOffer.item_key, guestOffer.qty, itemRow.rarity || null]
+            );
+          }
+        } else {
+          const guestItemsRes = await pool.query(`
+            SELECT id, item_key, slot, rolled_atk, rolled_def, rolled_hp, rolled_crit, rolled_rarity
+            FROM inventory
+            WHERE player_id = $1 AND item_key = $2 AND equipped = FALSE
+            LIMIT $3
+          `, [guest.id, guestOffer.item_key, guestOffer.qty]);
           
-          // Adiciona ao owner COM OS MESMOS STATS
-          await pool.query(`
-            INSERT INTO inventory (player_id, item_key, slot, qty, rolled_atk, rolled_def, rolled_hp, rolled_crit, rolled_rarity, equipped)
-            VALUES ($1, $2, $3, 1, $4, $5, $6, $7, $8, FALSE)
-          `, [owner.id, item.item_key, item.slot, item.rolled_atk, item.rolled_def, item.rolled_hp, item.rolled_crit, item.rolled_rarity]);
+          for (const item of guestItemsRes.rows) {
+            await pool.query('DELETE FROM inventory WHERE id = $1', [item.id]);
+            await pool.query(`
+              INSERT INTO inventory (player_id, item_key, slot, qty, rolled_atk, rolled_def, rolled_hp, rolled_crit, rolled_rarity, equipped)
+              VALUES ($1, $2, $3, 1, $4, $5, $6, $7, $8, FALSE)
+            `, [owner.id, item.item_key, item.slot, item.rolled_atk, item.rolled_def, item.rolled_hp, item.rolled_crit, item.rolled_rarity]);
+          }
         }
       }
       

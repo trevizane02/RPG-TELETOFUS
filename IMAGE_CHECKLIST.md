@@ -5,6 +5,8 @@ Guia rápido de upload:
 - Mobs: `/setmobimg <key>` (mobs normais) e `/setmobdimg <key>` (mobs de dungeon, prefixo `d_`).
 - Itens: `/setitemimg <key>` (consumíveis, equipamentos, acessórios, chaves).
 - Eventos/capas: `/seteventimg <chest|trap|merchant|loot_gold|loot_item|dungeon_plains|dungeon_forest|dungeon_swamp|dungeon_special>`.
+- Arena (brasões): `/setarenaimg <arena_rank_sangue_novo|arena_rank_desafiador|arena_rank_veterano|arena_rank_campeao|arena_rank_lenda>`.
+- Arena (capas): `arena_cover`, `arena_ranks_cover`, `arena_chests_cover`.
 - Lojas: `/setshopimg <main|vila|matadores|castelo>`.
 
 ## Mapas
@@ -66,50 +68,59 @@ Guia rápido de upload:
 - [ ] dark_robe | Manto Sombrio (armor, grave)
 - [ok] dungeon_key | Chave de Masmorra (key, drop global)
 - [ok] hunting_bow | Arco de Caça (weapon, plains)
-- [ ] knight_blade | Lâmina do Cavaleiro (weapon, desert)
-- [ ] leather_armor | Armadura de Couro (armor, plains)
-- [ ] mage_staff | Cajado do Aprendiz (weapon, forest)
-- [ ] plate_armor | Armadura de Placas (armor, mountain)
+- [ok] knight_blade | Lâmina do Cavaleiro (weapon, desert)
+- [ok] leather_armor | Armadura de Couro (armor, plains)
+- [ok] mage_staff | Cajado do Aprendiz (weapon, forest)
+- [ok] plate_armor | Armadura de Placas (armor, mountain)
 - [ ] ring_protect | Anel de Proteção (ring, grave)
 - [ ] sabre | Sabre (weapon, forest)
 - [ok] short_sword | Espada Curta (weapon, plains)
 - [ ] steel_shield | Escudo de Aço (shield, forest)
-- [ ] tower_shield | Escudo Torre (shield, mountain)
+- [ok] tower_shield | Escudo Torre (shield, mountain)
 - [ok] wooden_shield | Escudo de Madeira (shield, plains)
-- [ ] longbow | Arco Longo (weapon, forest)
-- [ ] crossbow | Besta Reforçada (weapon, mountain)
-- [ ] arcane_wand | Varinha Arcana (weapon, grave)
-- [ ] crystal_staff | Cajado de Cristal (weapon, desert)
-- [ ] novice_rod | Cajado Novato (weapon, plains)
-- [ ] brass_ring | Anel de Latão (ring, plains)
-- [ ] sapphire_amulet | Colar de Safira (amulet, plains)
-- [ ] leather_boots | Bota de Couro (boots, plains)
-- [ ] silver_ring | Anel de Prata (ring, forest)
-- [ ] platinum_amulet | Colar de Platina (amulet, forest)
-- [ ] iron_boots | Bota de Ferro (boots, forest)
+- [ok] longbow | Arco Longo (weapon, forest)
+- [ok] crossbow | Besta Reforçada (weapon, mountain)
+- [ok] arcane_wand | Varinha Arcana (weapon, grave)
+- [ok] crystal_staff | Cajado de Cristal (weapon, desert)
+- [ok] novice_rod | Cajado Novato (weapon, plains)
+- [ok] brass_ring | Anel de Latão (ring, plains)
+- [ok] sapphire_amulet | Colar de Safira (amulet, plains)
+- [ok] leather_boots | Bota de Couro (boots, plains)
+- [ok] silver_ring | Anel de Prata (ring, forest)
+- [ok] platinum_amulet | Colar de Platina (amulet, forest)
+- [ok] iron_boots | Bota de Ferro (boots, forest)
 
 ## Consumíveis
-- [ ] health_potion | Poção de Vida
-- [ ] energy_potion | Poção de Energia (drop raro)
-- [ ] atk_tonic | Tônico de Força
-- [ ] def_tonic | Tônico de Defesa
-- [ ] crit_tonic | Tônico de Precisão
+- [ok] health_potion | Poção de Vida
+- [ok] energy_potion | Poção de Energia (drop raro)
+- [ok] atk_tonic | Tônico de Força
+- [ok] def_tonic | Tônico de Defesa
+- [ok] crit_tonic | Tônico de Precisão
 
 ## Eventos / Capas
-- [ ] loot_gold | Imagem genérica para drop de gold
+- [ok] loot_gold | Imagem genérica para drop de gold
 - [ ] loot_item | Imagem genérica para drop de item
-- [ ] dungeon_plains | Capa da dungeon da Planície
-- [ ] dungeon_forest | Capa da dungeon da Floresta
-- [ ] dungeon_swamp | Capa da dungeon do Pântano
-- [ ] dungeon_special | Capa da dungeon Especial
-- [ ] CHEST_IMAGE_ID | Baú encontrado
-- [ ] TRAP_IMAGE_ID | Armadilha
-- [ ] MERCHANT_IMAGE_ID | Mercador
+- [ok] dungeon_plains | Capa da dungeon da Planície
+- [ok] dungeon_forest | Capa da dungeon da Floresta
+- [ok] dungeon_swamp | Capa da dungeon do Pântano
+- [ok] dungeon_special | Capa da dungeon Especial
+- [ok] CHEST_IMAGE_ID | Baú encontrado
+- [ok] TRAP_IMAGE_ID | Armadilha
+- [ok] MERCHANT_IMAGE_ID | Mercador
+- Arena (brasões/ranks)
+  - [ ] arena_rank_sangue_novo | Sangue-Novo
+  - [ ] arena_rank_desafiador | Desafiador
+  - [ ] arena_rank_veterano | Veterano
+  - [ ] arena_rank_campeao | Campeão
+  - [ ] arena_rank_lenda | Lenda
+  - [ ] arena_cover | Capa do menu da Arena
+  - [ ] arena_ranks_cover | Capa da tela de ranks
+  - [ ] arena_chests_cover | Capa da tela de tesouros
 
 ## Lojas
-- [ ] shop_main | Capa do menu de lojas
-- [ ] shop_vila | Loja da Vila
-- [ ] shop_matadores | Loja dos Matadores
-- [ ] shop_castelo | Loja do Castelo
+- [ok] shop_main | Capa do menu de lojas
+- [ok] shop_vila | Loja da Vila
+- [ok] shop_matadores | Loja dos Matadores
+- [ok] shop_castelo | Loja do Castelo
 
 Obs.: os `*_IMAGE_ID` em .env funcionam como fallback para eventos/lojas; se não definir, o bot tenta usar a imagem do mapa ou a default do item/mob.
