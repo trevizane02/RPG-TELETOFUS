@@ -287,15 +287,15 @@ export function registerArena(bot, deps) {
 
   async function getCoverImage(key) {
     if (!key) return null;
-    if (coverImages.has(key)) return coverImages.get(key);
+    const cached = coverImages.get(key);
+    if (cached) return cached;
     try {
       const res = await pool.query("SELECT file_id FROM event_images WHERE event_key = $1", [key]);
       const fileId = res.rows[0]?.file_id || null;
-      coverImages.set(key, fileId);
+      if (fileId) coverImages.set(key, fileId);
       return fileId;
     } catch (e) {
       console.error("arena cover image load", e.message);
-      coverImages.set(key, null);
       return null;
     }
   }
