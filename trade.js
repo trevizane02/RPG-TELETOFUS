@@ -608,20 +608,34 @@ export function registerTrade(bot, deps) {
       // Valida slots do destinatário
       if (ownerOffer && !["__gold","__tofus"].includes(ownerOffer.item_key)) {
         const guestSlotsRes = await pool.query(`
-          SELECT COUNT(*) as used FROM inventory WHERE player_id = $1 AND equipped = FALSE
+          SELECT 
+            COUNT(*)::int as used,
+            COALESCE(p.inventory_slots_max, 20)::int as max
+          FROM players p
+          LEFT JOIN inventory inv ON inv.player_id = p.id AND inv.equipped = FALSE
+          WHERE p.id = $1
+          GROUP BY p.inventory_slots_max
         `, [guest.id]);
-        const guestSlots = parseInt(guestSlotsRes.rows[0].used);
-        if (guestSlots + ownerOffer.qty > 20) {
+        const guestSlots = parseInt(guestSlotsRes.rows[0]?.used || 0);
+        const guestMax = parseInt(guestSlotsRes.rows[0]?.max || 20);
+        if (guestSlots + ownerOffer.qty > guestMax) {
           session.confirmed = { owner: false, guest: false };
           return ctx.answerCbQuery("Inventário do convidado está cheio!");
         }
       }
       if (guestOffer && !["__gold","__tofus"].includes(guestOffer.item_key)) {
         const ownerSlotsRes = await pool.query(`
-          SELECT COUNT(*) as used FROM inventory WHERE player_id = $1 AND equipped = FALSE
+          SELECT 
+            COUNT(*)::int as used,
+            COALESCE(p.inventory_slots_max, 20)::int as max
+          FROM players p
+          LEFT JOIN inventory inv ON inv.player_id = p.id AND inv.equipped = FALSE
+          WHERE p.id = $1
+          GROUP BY p.inventory_slots_max
         `, [owner.id]);
-        const ownerSlots = parseInt(ownerSlotsRes.rows[0].used);
-        if (ownerSlots + guestOffer.qty > 20) {
+        const ownerSlots = parseInt(ownerSlotsRes.rows[0]?.used || 0);
+        const ownerMax = parseInt(ownerSlotsRes.rows[0]?.max || 20);
+        if (ownerSlots + guestOffer.qty > ownerMax) {
           session.confirmed = { owner: false, guest: false };
           return ctx.answerCbQuery("Inventário do dono está cheio!");
         }
