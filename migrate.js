@@ -884,6 +884,7 @@ export async function migrate() {
       await client.query("TRUNCATE loot_tables");
       await client.query(`UPDATE loot_tables SET map_id='plains' WHERE map_id IN ('planicie','planicies','planícies','planícies verdejantes')`);
       await client.query(`DELETE FROM loot_tables WHERE map_id NOT IN (${MAP_KEYS.map((_, i) => `$${i + 1}`).join(",")})`, MAP_KEYS);
+      await client.query(`DELETE FROM shop_items WHERE item_key NOT IN (${ITEM_KEYS.map((_, i) => `$${i + 1}`).join(",")})`, ITEM_KEYS);
 
       // Atualiza nomes e remove mapas legados
       for (const m of MAP_SEEDS) {
