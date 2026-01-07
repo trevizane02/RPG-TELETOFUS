@@ -610,13 +610,13 @@ export async function migrate() {
           AND inv.item_key = keep.item_key
           AND inv.id <> keep.keep_id;
       `);
-      
-      // Create conditional unique index ONLY for consumables (allows stacking)
       await client.query(`
         CREATE UNIQUE INDEX IF NOT EXISTS inventory_consumable_stack 
         ON inventory (player_id, item_key) 
         WHERE slot = 'consumable'
       `);
+      
+      // Create conditional unique index ONLY for consumables (allows stacking)
       await client.query(`CREATE INDEX IF NOT EXISTS inventory_item_key_idx ON inventory(item_key)`);
 
       // SHOP ITEMS
