@@ -574,8 +574,18 @@ export async function migrate() {
       // Drop old unique index if exists
       await client.query(`DROP INDEX IF EXISTS inventory_player_item_key`);
       
-      // Normaliza slot consumível e deduplica stacks antes do índice único
-      await client.query(`DROP INDEX IF EXISTS inventory_consumable_stack`);
+      // Normaliza slot consumível e deduplica stacks antes de recriar índice (drop qualquer parcial antiga)
+      await client.query(`
+        DO $$
+        DECLARE r RECORD;
+        BEGIN
+          FOR r IN
+            SELECT indexname FROM pg_indexes WHERE tablename = 'inventory' AND indexname LIKE 'inventory_consumable_stack%'
+          LOOP
+            EXECUTE 'DROP INDEX IF EXISTS ' || quote_ident(r.indexname);
+          END LOOP;
+        END $$;
+      `);
       await client.query(`
         UPDATE inventory inv
         SET slot = 'consumable'
