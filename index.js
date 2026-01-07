@@ -1133,7 +1133,7 @@ async function renderMenu(ctx) {
     [Markup.button.callback("🏪 Loja", "loja_menu"), Markup.button.callback("🤝 Troca", "trade_start")],
     [Markup.button.callback("🏟️ Arena", "arena_menu_v2"), Markup.button.callback("🗝️ Masmorra", "dungeon_menu")],
     [Markup.button.callback(`👥 Online (${online.total})`, "online_stats"), Markup.button.callback("⚡ Energia", "energia")],
-    [Markup.button.callback("[🔥 VIP] Vire VIP", "vip")],
+    [Markup.button.callback("🔥 Vire VIP", "vip")],
   ];
   if (COMMUNITY_URL) {
     keyboard.push([Markup.button.url("💬 Comunidade", COMMUNITY_URL)]);
