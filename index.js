@@ -764,7 +764,9 @@ async function maybeDropItem(mapKey, difficulty = 1, isBoss = false, opts = {}) 
 
   if (isBoss) {
     const rarePool = items.filter((i) =>
-      ["rare", "epic", "legendary", "uncommon"].includes(i.rarity || "common")
+      ["rare", "epic", "legendary", "uncommon"].includes(i.rarity || "common") &&
+      !SHOP_ONLY_KEYS.has(i.key) &&
+      Number(i.drop_rate || 0) > 0
     );
     if (rarePool.length) return rarePool[Math.floor(Math.random() * rarePool.length)];
   }
