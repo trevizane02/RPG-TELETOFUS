@@ -699,12 +699,14 @@ async function sendCard(ctx, { fileId, caption, keyboard, parse_mode = "Markdown
 
 async function maybeDropItem(mapKey, difficulty = 1, isBoss = false, opts = {}) {
   const { dungeon = false, playerClass = null, playerLevel = null, dropBonusPct = 0 } = opts;
+  const SHOP_ONLY_KEYS = new Set(["elixir_xp", "elixir_drop", "energy_potion_pack"]);
   const res = await pool.query("SELECT * FROM items WHERE map_key = $1 OR map_key IS NULL", [mapKey]);
   const items = res.rows;
   if (items.length === 0) return null;
 
   const drops = [];
   for (const item of items) {
+    if (SHOP_ONLY_KEYS.has(item.key)) continue;
     if (item.boss_dungeon_only && !(dungeon && isBoss)) continue;
     if (item.boss_only && !isBoss) continue;
     if (item.class_req && playerClass && item.class_req !== playerClass) continue;

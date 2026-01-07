@@ -883,6 +883,7 @@ export async function migrate() {
       // Atualiza flags boss_only/boss_dungeon_only para itens existentes
       await client.query(`UPDATE items SET boss_only = true WHERE key = 'dungeon_key'`);
       await client.query(`UPDATE items SET boss_dungeon_only = true WHERE key IN ('brass_ring','sapphire_amulet','leather_boots','silver_ring','platinum_amulet','iron_boots')`);
+      await client.query(`UPDATE items SET drop_rate = 0 WHERE key IN ('elixir_xp','elixir_drop','energy_potion_pack')`);
 
 
       // CLEANUP LEGACY DATA (mapas/mobs/itens fora dos seeds)
