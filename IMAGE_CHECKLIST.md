@@ -105,6 +105,9 @@ Guia rápido de upload:
 - [ok] atk_tonic | Tônico de Força
 - [ok] def_tonic | Tônico de Defesa
 - [ok] crit_tonic | Tônico de Precisão
+- [ ] elixir_xp | Elixir de Sabedoria (consumable)
+- [ ] elixir_drop | Elixir da Fortuna (consumable)
+- [ ] energy_potion_pack | Pacote de Energia (3) (consumable, loja Tofus)
 
 ## Eventos / Capas
 - [ok] loot_gold | Imagem genérica para drop de gold

@@ -375,6 +375,16 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
     return Math.floor(Math.random() * (max - min + 1)) + min;
   }
 
+  function getPlayerBuff(player) {
+    if (!player?.temp_buff_expires_at) return { xp: 0, drop: 0 };
+    const active = new Date(player.temp_buff_expires_at).getTime() > Date.now();
+    if (!active) return { xp: 0, drop: 0 };
+    return {
+      xp: player.temp_xp_buff || 0,
+      drop: player.temp_drop_buff || 0,
+    };
+  }
+
   function waitMs(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
@@ -399,13 +409,15 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
     for (const uid of aliveMembers) {
       const member = session.memberData.get(uid);
       const player = await getPlayer(uid);
+      const buff = getPlayerBuff(player);
       const contrib = contribMap.get(uid) || 0;
       const xpShare = contribSum > 0 ? Math.max(1, Math.floor((xpTotal * contrib) / contribSum)) : Math.max(1, Math.floor(xpTotal / Math.max(1, aliveMembers.length)));
+      const xpShareBuffed = Math.round(xpShare * (1 + (buff.xp || 0) / 100));
       let gold = randInt(1, floor.isBoss ? 300 : 100);
       gold = Math.round(gold * (floor.scaling?.goldMult || 1) * partyMult);
 
-      await applyGoldAndXp(player.id, gold, xpShare);
-      const loot = { gold, xp: xpShare, items: [] };
+      await applyGoldAndXp(player.id, gold, xpShareBuffed);
+      const loot = { gold, xp: xpShareBuffed, items: [] };
 
       if (floor.isBoss) {
         const hpPotQty = randInt(1, 5);
@@ -418,7 +430,7 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
 
         const dropCount = randInt(1, 4);
         for (let i = 0; i < dropCount; i++) {
-          const drop = await maybeDropItem(session.mapKey, Math.min(4, floorIndex + 2), true, { dungeon: true, playerClass: player.class });
+          const drop = await maybeDropItem(session.mapKey, Math.min(4, floorIndex + 2), true, { dungeon: true, playerClass: player.class, dropBonusPct: buff.drop || 0 });
           if (drop) {
             await awardItem(player.id, drop);
             loot.items.push(drop);
@@ -434,7 +446,7 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
           if (bone) loot.items.push(bone);
         }
       } else {
-        const drop = await maybeDropItem(session.mapKey, Math.min(3, floorIndex + 1 + (floor.scaling?.tierBonus || 0)), false, { dungeon: true, playerClass: player.class });
+        const drop = await maybeDropItem(session.mapKey, Math.min(3, floorIndex + 1 + (floor.scaling?.tierBonus || 0)), false, { dungeon: true, playerClass: player.class, dropBonusPct: buff.drop || 0 });
         if (drop) {
           await awardItem(player.id, drop);
           loot.items.push(drop);

@@ -53,7 +53,10 @@ export const ITEM_SEEDS = [
   // Consumables
   { key: "health_potion", name: "Poção de Vida", slot: "consumable", rarity: "common", drop_rate: 0.05, map_key: null },
   { key: "energy_potion", name: "Poção de Energia", slot: "consumable", rarity: "uncommon", drop_rate: 0.01, map_key: null },
+  { key: "energy_potion_pack", name: "Pacote de Energia (3)", slot: "consumable", rarity: "rare", drop_rate: 0, map_key: null },
   { key: "atk_tonic", name: "Tônico de Força", slot: "consumable", rarity: "uncommon", drop_rate: 0.025, map_key: null },
   { key: "def_tonic", name: "Tônico de Defesa", slot: "consumable", rarity: "uncommon", drop_rate: 0.025, map_key: null },
   { key: "crit_tonic", name: "Tônico de Precisão", slot: "consumable", rarity: "uncommon", drop_rate: 0.02, map_key: null },
+  { key: "elixir_xp", name: "Elixir de Sabedoria", slot: "consumable", rarity: "rare", drop_rate: 0, map_key: null },
+  { key: "elixir_drop", name: "Elixir da Fortuna", slot: "consumable", rarity: "rare", drop_rate: 0, map_key: null },
 ];

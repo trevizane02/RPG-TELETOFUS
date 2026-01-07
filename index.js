@@ -67,7 +67,7 @@ const SHOP_DEFS = {
   },
   castelo: {
     name: "Loja do Castelo",
-    items: ["amulet_health"],
+    items: ["elixir_xp", "elixir_drop", "energy_potion_pack"],
   },
 };
 
@@ -85,6 +85,8 @@ const CONSUMABLE_EFFECTS = {
   atk_tonic: "+5 ATK por 30 minutos",
   def_tonic: "+5 DEF por 30 minutos",
   crit_tonic: "+8% CRIT por 30 minutos",
+  elixir_xp: "+10% XP ganho por 30 minutos",
+  elixir_drop: "+10% chance de drop por 30 minutos",
 };
 
 const ADMIN_IDS = new Set(
@@ -264,12 +266,14 @@ async function getPlayer(telegramId, name = "Aventureiro") {
   const buff = getActiveBuff(player);
   if (buff.expired) {
     await pool.query(
-      "UPDATE players SET temp_atk_buff = 0, temp_def_buff = 0, temp_crit_buff = 0, temp_buff_expires_at = NULL WHERE id = $1",
+      "UPDATE players SET temp_atk_buff = 0, temp_def_buff = 0, temp_crit_buff = 0, temp_xp_buff = 0, temp_drop_buff = 0, temp_buff_expires_at = NULL WHERE id = $1",
       [player.id]
     );
     player.temp_atk_buff = 0;
     player.temp_def_buff = 0;
     player.temp_crit_buff = 0;
+    player.temp_xp_buff = 0;
+    player.temp_drop_buff = 0;
     player.temp_buff_expires_at = null;
   }
   if (player.hp <= 0) {
@@ -361,15 +365,17 @@ function formatDateShort(dt) {
 }
 
 function getActiveBuff(player) {
-  if (!player) return { atk: 0, def: 0, crit: 0 };
-  if (!player.temp_buff_expires_at) return { atk: 0, def: 0, crit: 0 };
+  if (!player) return { atk: 0, def: 0, crit: 0, xp: 0, drop: 0 };
+  if (!player.temp_buff_expires_at) return { atk: 0, def: 0, crit: 0, xp: 0, drop: 0 };
   const expires = new Date(player.temp_buff_expires_at);
   const active = expires.getTime() > Date.now();
-  if (!active) return { atk: 0, def: 0, crit: 0, expired: true };
+  if (!active) return { atk: 0, def: 0, crit: 0, xp: 0, drop: 0, expired: true };
   return {
     atk: player.temp_atk_buff || 0,
     def: player.temp_def_buff || 0,
     crit: player.temp_crit_buff || 0,
+    xp: player.temp_xp_buff || 0,
+    drop: player.temp_drop_buff || 0,
   };
 }
 
@@ -378,10 +384,10 @@ async function applyTempBuff(playerId, buff, minutes = 30) {
   await pool.query(
     `
     UPDATE players
-    SET temp_atk_buff = $1, temp_def_buff = $2, temp_crit_buff = $3, temp_buff_expires_at = $4
-    WHERE id = $5
+    SET temp_atk_buff = $1, temp_def_buff = $2, temp_crit_buff = $3, temp_xp_buff = $4, temp_drop_buff = $5, temp_buff_expires_at = $6
+    WHERE id = $7
   `,
-    [buff.atk || 0, buff.def || 0, buff.crit || 0, expiresAt, playerId]
+    [buff.atk || 0, buff.def || 0, buff.crit || 0, buff.xp || 0, buff.drop || 0, expiresAt, playerId]
   );
   return expiresAt;
 }
@@ -662,6 +668,18 @@ async function useConsumable(player, itemKey) {
     return { ok: true, message: "🎯 Tônico de Precisão: +8% CRIT por 30 minutos." };
   }
 
+  if (key === "elixir_xp") {
+    await applyTempBuff(player.id, { xp: 10 }, 30);
+    await consumeItem(player.id, key, 1);
+    return { ok: true, message: "📘 Elixir de Sabedoria: +10% XP por 30 minutos." };
+  }
+
+  if (key === "elixir_drop") {
+    await applyTempBuff(player.id, { drop: 10 }, 30);
+    await consumeItem(player.id, key, 1);
+    return { ok: true, message: "🍀 Elixir da Fortuna: +10% chance de drop por 30 minutos." };
+  }
+
   return { ok: false, message: "Este consumível ainda não tem efeito." };
 }
 
@@ -680,7 +698,7 @@ async function sendCard(ctx, { fileId, caption, keyboard, parse_mode = "Markdown
 }
 
 async function maybeDropItem(mapKey, difficulty = 1, isBoss = false, opts = {}) {
-  const { dungeon = false, playerClass = null, playerLevel = null } = opts;
+  const { dungeon = false, playerClass = null, playerLevel = null, dropBonusPct = 0 } = opts;
   const res = await pool.query("SELECT * FROM items WHERE map_key = $1 OR map_key IS NULL", [mapKey]);
   const items = res.rows;
   if (items.length === 0) return null;
@@ -704,7 +722,8 @@ async function maybeDropItem(mapKey, difficulty = 1, isBoss = false, opts = {}) 
         ? 4
         : 1
       : 1;
-    const chance = Math.min(0.6, base * difficultyBonus * bossFactor);
+    const dropBonus = 1 + Math.max(-0.9, (dropBonusPct || 0) / 100);
+    const chance = Math.min(0.6, base * difficultyBonus * bossFactor * dropBonus);
     if (Math.random() < chance) drops.push(item);
   }
 
@@ -828,7 +847,9 @@ bot.use((ctx, next) => {
   const isGroup = ctx.chat && (ctx.chat.type === "group" || ctx.chat.type === "supergroup");
   if (!isGroup) return next();
   const text = ctx.message?.text || "";
+  const cbData = ctx.callbackQuery?.data || "";
   if (text.startsWith("/event")) return next();
+  if (cbData.startsWith("event_claim:") || cbData === "noop_event_claimed") return next();
   // ignora comandos e callbacks no grupo para não iniciar jogo
   return;
 });
@@ -1394,12 +1415,13 @@ async function startRun(ctx, mapKey) {
 
 async function startChest(ctx, player, map) {
   const lvlInfo = await getLevelFromTotalXp(player.xp_total);
+  const buff = getActiveBuff(player);
   const gold = Math.floor(Math.random() * 10 * map.difficulty) + 20 * map.difficulty;
   await pool.query("UPDATE players SET gold = gold + $1 WHERE id = $2", [gold, player.id]);
   await setPlayerState(player.id, STATES.MENU);
 
   let lootMsg = "";
-  const item = await maybeDropItem(map.key, map.difficulty, false, { dungeon: false, playerClass: player.class, playerLevel: lvlInfo.level });
+  const item = await maybeDropItem(map.key, map.difficulty, false, { dungeon: false, playerClass: player.class, playerLevel: lvlInfo.level, dropBonusPct: buff.drop || 0 });
   if (item) {
     const result = await awardItem(player.id, item);
     if (result.success) {
@@ -1571,6 +1593,7 @@ async function handleAttack(ctx) {
   let player = await getPlayer(userId, ctx.from.first_name);
   const lvlInfo = await getLevelFromTotalXp(player.xp_total);
   const stats = await getPlayerStats(player);
+  const buff = getActiveBuff(player);
 
   const isCrit = Math.random() * 100 < stats.total_crit;
   const pDmg = rollDamage(stats.total_atk, fight.mobDef, isCrit);
@@ -1579,9 +1602,10 @@ async function handleAttack(ctx) {
 
   if (fight.mobHp <= 0) {
     fights.delete(userId);
-    const item = await maybeDropItem(fight.mapKey, fight.mapDifficulty, fight.mobRarity === "boss", { dungeon: false, playerClass: player.class, playerLevel: lvlInfo.level });
+    const item = await maybeDropItem(fight.mapKey, fight.mapDifficulty, fight.mobRarity === "boss", { dungeon: false, playerClass: player.class, playerLevel: lvlInfo.level, dropBonusPct: buff.drop || 0 });
+    const xpGain = Math.round(fight.mobXp * (1 + (buff.xp || 0) / 100));
     await pool.query("UPDATE players SET xp_total = xp_total + $1, gold = gold + $2 WHERE id = $3", [
-      fight.mobXp,
+      xpGain,
       fight.mobGold,
       player.id,
     ]);
@@ -1605,7 +1629,7 @@ async function handleAttack(ctx) {
 
     const reward =
       `🏆 *Vitória!*\n` +
-      `+${fight.mobXp} XP\n` +
+      `+${xpGain} XP\n` +
       `+${fight.mobGold} Gold${itemMsg}`;
     await sendCard(ctx, {
       fileId: lootImage,
@@ -1976,13 +2000,15 @@ async function runDungeon(session) {
     const rewardGold = Math.round(mob.gold_gain * session.difficulty * scale);
     for (const uid of session.members) {
       const p = await getPlayer(uid);
+      const buff = getActiveBuff(p);
       const lvlInfo = await getLevelFromTotalXp(p.xp_total);
-      await pool.query("UPDATE players SET xp_total = xp_total + $1, gold = gold + $2 WHERE id = $3", [rewardXp, rewardGold, p.id]);
-      const item = await maybeDropItem(map.key, map.difficulty, mob.rarity === "boss", { dungeon: false, playerClass: p.class, playerLevel: lvlInfo.level });
+      const xpGain = Math.round(rewardXp * (1 + (buff.xp || 0) / 100));
+      await pool.query("UPDATE players SET xp_total = xp_total + $1, gold = gold + $2 WHERE id = $3", [xpGain, rewardGold, p.id]);
+      const item = await maybeDropItem(map.key, map.difficulty, mob.rarity === "boss", { dungeon: false, playerClass: p.class, playerLevel: lvlInfo.level, dropBonusPct: buff.drop || 0 });
       if (item) await awardItem(p.id, item);
       await bot.telegram.sendMessage(
         uid,
-        `🏅 Masmorra concluída!\nRecompensas: +${rewardXp} XP, +${rewardGold} Gold${item ? `\nLoot: ${item.name}` : ""}`
+        `🏅 Masmorra concluída!\nRecompensas: +${xpGain} XP, +${rewardGold} Gold${item ? `\nLoot: ${item.name}` : ""}`
       );
     }
   } else {
@@ -2279,11 +2305,22 @@ bot.action(/^shop_buy:([^:]+):([^:]+):(\d+)$/, async (ctx) => {
   await pool.query(`UPDATE players SET ${currencyField} = ${currencyField} - $1 WHERE id = $2`, [totalPrice, player.id]);
 
   for (let i = 0; i < qty; i++) {
-    const result = await awardItem(player.id, { ...item, key: item.item_key });
-    if (!result.success) {
-      await pool.query(`UPDATE players SET ${currencyField} = ${currencyField} + $1 WHERE id = $2`, [item.buy_price * (qty - i), player.id]);
-      await ctx.reply("❌ Erro ao adicionar item. Valor reembolsado.");
-      return;
+    if (item.item_key === "energy_potion_pack") {
+      for (let j = 0; j < 3; j++) {
+        const res = await awardItem(player.id, { ...item, key: "energy_potion", slot: "consumable" });
+        if (!res.success) {
+          await pool.query(`UPDATE players SET ${currencyField} = ${currencyField} + $1 WHERE id = $2`, [item.buy_price * (qty - i), player.id]);
+          await ctx.reply("❌ Erro ao adicionar item. Valor reembolsado.");
+          return;
+        }
+      }
+    } else {
+      const result = await awardItem(player.id, { ...item, key: item.item_key });
+      if (!result.success) {
+        await pool.query(`UPDATE players SET ${currencyField} = ${currencyField} + $1 WHERE id = $2`, [item.buy_price * (qty - i), player.id]);
+        await ctx.reply("❌ Erro ao adicionar item. Valor reembolsado.");
+        return;
+      }
     }
   }
 

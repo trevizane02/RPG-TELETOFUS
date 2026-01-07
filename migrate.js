@@ -6,9 +6,9 @@ const MAP_SEEDS = [
   { key: "forest", name: "Floresta Sombria", level_min: 8, difficulty: 2 },
   { key: "swamp", name: "Pântano", level_min: 15, difficulty: 3 },
   { key: "grave", name: "Cemitério Antigo", level_min: 22, difficulty: 3 },
-  { key: "desert", name: "Deserto Escaldante", level_min: 28, difficulty: 4 },
-  { key: "mountain", name: "Montanhas Gélidas", level_min: 35, difficulty: 4 },
-  { key: "abyss", name: "Abismo", level_min: 45, difficulty: 5 },
+  { key: "desert", name: "Deserto Escaldante", level_min: 32, difficulty: 4 },
+  { key: "mountain", name: "Montanhas Gélidas", level_min: 42, difficulty: 4 },
+  { key: "abyss", name: "Abismo", level_min: 52, difficulty: 5 },
 ];
 
 const MOB_SEEDS = [
@@ -60,28 +60,28 @@ const MOB_SEEDS = [
   { key: "lich", name: "Lich", map_key: "grave", rarity: "boss", level_min: 31, hp: 350, atk: 50, def: 15, xp_gain: 260, gold_gain: 220 },
 
   // Desert
-  { key: "scorpion", name: "Escorpião", map_key: "desert", rarity: "common", level_min: 28, hp: 230, atk: 35, def: 10, xp_gain: 160, gold_gain: 130 },
-  { key: "sand_worm", name: "Verme de Areia", map_key: "desert", rarity: "uncommon", level_min: 29, hp: 260, atk: 38, def: 10, xp_gain: 180, gold_gain: 140 },
-  { key: "nomad", name: "Nômade", map_key: "desert", rarity: "uncommon", level_min: 30, hp: 240, atk: 42, def: 12, xp_gain: 190, gold_gain: 150 },
-  { key: "scarab", name: "Escaravelho", map_key: "desert", rarity: "rare", level_min: 32, hp: 280, atk: 44, def: 13, xp_gain: 210, gold_gain: 170 },
-  { key: "fire_imp", name: "Diabrete Flamejante", map_key: "desert", rarity: "rare", level_min: 33, hp: 250, atk: 48, def: 12, xp_gain: 230, gold_gain: 180 },
-  { key: "ancient_guard", name: "Guardião Antigo", map_key: "desert", rarity: "boss", level_min: 35, hp: 380, atk: 55, def: 18, xp_gain: 320, gold_gain: 260 },
+  { key: "scorpion", name: "Escorpião", map_key: "desert", rarity: "common", level_min: 32, hp: 230, atk: 35, def: 10, xp_gain: 160, gold_gain: 130 },
+  { key: "sand_worm", name: "Verme de Areia", map_key: "desert", rarity: "uncommon", level_min: 33, hp: 260, atk: 38, def: 10, xp_gain: 180, gold_gain: 140 },
+  { key: "nomad", name: "Nômade", map_key: "desert", rarity: "uncommon", level_min: 34, hp: 240, atk: 42, def: 12, xp_gain: 190, gold_gain: 150 },
+  { key: "scarab", name: "Escaravelho", map_key: "desert", rarity: "rare", level_min: 36, hp: 280, atk: 44, def: 13, xp_gain: 210, gold_gain: 170 },
+  { key: "fire_imp", name: "Diabrete Flamejante", map_key: "desert", rarity: "rare", level_min: 37, hp: 250, atk: 48, def: 12, xp_gain: 230, gold_gain: 180 },
+  { key: "ancient_guard", name: "Guardião Antigo", map_key: "desert", rarity: "boss", level_min: 39, hp: 380, atk: 55, def: 18, xp_gain: 320, gold_gain: 260 },
 
   // Mountain
-  { key: "ice_golem", name: "Golem de Gelo", map_key: "mountain", rarity: "uncommon", level_min: 35, hp: 320, atk: 50, def: 16, xp_gain: 260, gold_gain: 200 },
-  { key: "harpy", name: "Harpia", map_key: "mountain", rarity: "uncommon", level_min: 36, hp: 300, atk: 48, def: 14, xp_gain: 250, gold_gain: 190 },
-  { key: "yeti", name: "Yeti", map_key: "mountain", rarity: "rare", level_min: 37, hp: 340, atk: 54, def: 17, xp_gain: 280, gold_gain: 220 },
-  { key: "wyvern", name: "Wyvern", map_key: "mountain", rarity: "rare", level_min: 38, hp: 360, atk: 58, def: 18, xp_gain: 320, gold_gain: 240 },
-  { key: "frost_orc", name: "Orc da Neve", map_key: "mountain", rarity: "uncommon", level_min: 35, hp: 310, atk: 52, def: 15, xp_gain: 260, gold_gain: 200 },
-  { key: "dragon_young", name: "Dragão Jovem", map_key: "mountain", rarity: "boss", level_min: 40, hp: 480, atk: 70, def: 22, xp_gain: 420, gold_gain: 320 },
+  { key: "ice_golem", name: "Golem de Gelo", map_key: "mountain", rarity: "uncommon", level_min: 42, hp: 320, atk: 50, def: 16, xp_gain: 260, gold_gain: 200 },
+  { key: "harpy", name: "Harpia", map_key: "mountain", rarity: "uncommon", level_min: 43, hp: 300, atk: 48, def: 14, xp_gain: 250, gold_gain: 190 },
+  { key: "yeti", name: "Yeti", map_key: "mountain", rarity: "rare", level_min: 44, hp: 340, atk: 54, def: 17, xp_gain: 280, gold_gain: 220 },
+  { key: "wyvern", name: "Wyvern", map_key: "mountain", rarity: "rare", level_min: 45, hp: 360, atk: 58, def: 18, xp_gain: 320, gold_gain: 240 },
+  { key: "frost_orc", name: "Orc da Neve", map_key: "mountain", rarity: "uncommon", level_min: 42, hp: 310, atk: 52, def: 15, xp_gain: 260, gold_gain: 200 },
+  { key: "dragon_young", name: "Dragão Jovem", map_key: "mountain", rarity: "boss", level_min: 47, hp: 480, atk: 70, def: 22, xp_gain: 420, gold_gain: 320 },
 
   // Abyss
-  { key: "demonling", name: "Demonling", map_key: "abyss", rarity: "rare", level_min: 45, hp: 380, atk: 68, def: 20, xp_gain: 380, gold_gain: 280 },
-  { key: "shadow_knight", name: "Cavaleiro Sombrio", map_key: "abyss", rarity: "rare", level_min: 47, hp: 420, atk: 72, def: 22, xp_gain: 420, gold_gain: 300 },
-  { key: "hellhound", name: "Cão Infernal", map_key: "abyss", rarity: "rare", level_min: 48, hp: 400, atk: 75, def: 21, xp_gain: 440, gold_gain: 310 },
-  { key: "cultist", name: "Cultista", map_key: "abyss", rarity: "rare", level_min: 46, hp: 390, atk: 70, def: 21, xp_gain: 410, gold_gain: 290 },
-  { key: "void_spawn", name: "Cria do Vazio", map_key: "abyss", rarity: "rare", level_min: 49, hp: 430, atk: 78, def: 23, xp_gain: 460, gold_gain: 330 },
-  { key: "abyss_lord", name: "Lorde do Abismo", map_key: "abyss", rarity: "boss", level_min: 52, hp: 650, atk: 95, def: 28, xp_gain: 620, gold_gain: 480 },
+  { key: "demonling", name: "Demonling", map_key: "abyss", rarity: "rare", level_min: 52, hp: 380, atk: 68, def: 20, xp_gain: 380, gold_gain: 280 },
+  { key: "shadow_knight", name: "Cavaleiro Sombrio", map_key: "abyss", rarity: "rare", level_min: 54, hp: 420, atk: 72, def: 22, xp_gain: 420, gold_gain: 300 },
+  { key: "hellhound", name: "Cão Infernal", map_key: "abyss", rarity: "rare", level_min: 55, hp: 400, atk: 75, def: 21, xp_gain: 440, gold_gain: 310 },
+  { key: "cultist", name: "Cultista", map_key: "abyss", rarity: "rare", level_min: 53, hp: 390, atk: 70, def: 21, xp_gain: 410, gold_gain: 290 },
+  { key: "void_spawn", name: "Cria do Vazio", map_key: "abyss", rarity: "rare", level_min: 56, hp: 430, atk: 78, def: 23, xp_gain: 460, gold_gain: 330 },
+  { key: "abyss_lord", name: "Lorde do Abismo", map_key: "abyss", rarity: "boss", level_min: 59, hp: 650, atk: 95, def: 28, xp_gain: 620, gold_gain: 480 },
 ];
 
 
@@ -156,6 +156,8 @@ export async function migrate() {
           temp_atk_buff INT NOT NULL DEFAULT 0,
           temp_def_buff INT NOT NULL DEFAULT 0,
           temp_crit_buff INT NOT NULL DEFAULT 0,
+          temp_xp_buff INT NOT NULL DEFAULT 0,
+          temp_drop_buff INT NOT NULL DEFAULT 0,
           temp_buff_expires_at TIMESTAMPTZ,
           last_seen TIMESTAMPTZ DEFAULT now(),
           tofus INT NOT NULL DEFAULT 0,
@@ -209,6 +211,12 @@ export async function migrate() {
           END IF;
           IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='players' AND column_name='temp_crit_buff') THEN
             ALTER TABLE players ADD COLUMN temp_crit_buff INT NOT NULL DEFAULT 0;
+          END IF;
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='players' AND column_name='temp_xp_buff') THEN
+            ALTER TABLE players ADD COLUMN temp_xp_buff INT NOT NULL DEFAULT 0;
+          END IF;
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='players' AND column_name='temp_drop_buff') THEN
+            ALTER TABLE players ADD COLUMN temp_drop_buff INT NOT NULL DEFAULT 0;
           END IF;
           IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='players' AND column_name='temp_buff_expires_at') THEN
             ALTER TABLE players ADD COLUMN temp_buff_expires_at TIMESTAMPTZ;
@@ -853,7 +861,9 @@ export async function migrate() {
         { item_key: 'hunting_bow', currency: 'gold', buy_price: 110, sell_price: 32 },
         
         // VIP/Premium (Tofus - moeda premium)
-        { item_key: 'amulet_health', currency: 'tofus', buy_price: 100, sell_price: null },
+        { item_key: 'elixir_xp', currency: 'tofus', buy_price: 10, sell_price: null },
+        { item_key: 'elixir_drop', currency: 'tofus', buy_price: 10, sell_price: null },
+        { item_key: 'energy_potion_pack', currency: 'tofus', buy_price: 10, sell_price: null },
       ];
       
       console.log("Seeding loja...");
