@@ -19,6 +19,8 @@ export function registerDungeon(bot, deps) {
     STATES,
   } = deps;
 
+  const SHOP_ONLY_KEYS = new Set(["elixir_xp", "elixir_drop", "energy_potion_pack"]);
+
   const sessions = new Map(); // code -> session
   const exitConfirmations = new Map(); // userId -> expires
   const pendingPasswords = new Map(); // userId -> { mode: 'create'|'join', code?, digits: '' }
@@ -430,14 +432,14 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
 
         const dropCount = randInt(1, 4);
         for (let i = 0; i < dropCount; i++) {
-          const drop = await maybeDropItem(session.mapKey, Math.min(4, floorIndex + 2), true, { dungeon: true, playerClass: player.class, dropBonusPct: buff.drop || 0 });
-          if (drop) {
-            await awardItem(player.id, drop);
-            loot.items.push(drop);
-            if (!session.bestDrop || compareRarity(drop.rarity, session.bestDrop.rarity) > 0) {
-              session.bestDrop = drop;
-            }
+        const drop = await maybeDropItem(session.mapKey, Math.min(4, floorIndex + 2), true, { dungeon: true, playerClass: player.class, dropBonusPct: buff.drop || 0 });
+        if (drop && !SHOP_ONLY_KEYS.has(drop.key)) {
+          await awardItem(player.id, drop);
+          loot.items.push(drop);
+          if (!session.bestDrop || compareRarity(drop.rarity, session.bestDrop.rarity) > 0) {
+            session.bestDrop = drop;
           }
+        }
         }
 
         const boneChance = session.def.boneChance || 0.02;
@@ -447,7 +449,7 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
         }
       } else {
         const drop = await maybeDropItem(session.mapKey, Math.min(3, floorIndex + 1 + (floor.scaling?.tierBonus || 0)), false, { dungeon: true, playerClass: player.class, dropBonusPct: buff.drop || 0 });
-        if (drop) {
+        if (drop && !SHOP_ONLY_KEYS.has(drop.key)) {
           await awardItem(player.id, drop);
           loot.items.push(drop);
         }
