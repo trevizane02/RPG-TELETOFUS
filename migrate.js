@@ -575,6 +575,7 @@ export async function migrate() {
       await client.query(`DROP INDEX IF EXISTS inventory_player_item_key`);
       
       // Normaliza slot consumível e deduplica stacks antes do índice único
+      await client.query(`DROP INDEX IF EXISTS inventory_consumable_stack`);
       await client.query(`
         UPDATE inventory inv
         SET slot = 'consumable'
@@ -625,18 +626,24 @@ export async function migrate() {
           HAVING COUNT(*) > 1 OR SUM(qty) > 1
         )
         UPDATE inventory inv
-        SET qty = agg.total
+        SET qty = agg.total, slot = 'consumable'
         FROM agg
         WHERE inv.id = agg.keep_id;
       `);
       await client.query(`
-        WITH dup AS (
-          SELECT inv.id
-          FROM inventory inv
-          JOIN agg ON agg.player_id = inv.player_id AND agg.item_key = inv.item_key
-          WHERE inv.id <> agg.keep_id AND inv.slot = 'consumable'
+        WITH agg AS (
+          SELECT player_id, item_key, MIN(id) AS keep_id
+          FROM inventory
+          WHERE slot = 'consumable'
+          GROUP BY player_id, item_key
+          HAVING COUNT(*) > 1
         )
-        DELETE FROM inventory WHERE id IN (SELECT id FROM dup);
+        DELETE FROM inventory inv
+        USING agg
+        WHERE inv.slot = 'consumable'
+          AND inv.player_id = agg.player_id
+          AND inv.item_key = agg.item_key
+          AND inv.id <> agg.keep_id;
       `);
       
       // Create conditional unique index ONLY for consumables (allows stacking)
