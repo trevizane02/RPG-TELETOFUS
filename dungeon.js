@@ -471,6 +471,10 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
             loot.items.push(graveDrop);
           }
         }
+        if (session.mapKey === "special" && Math.random() < 0.02) {
+          const bone = await giveItemByKey(player.id, "bone_key", 1);
+          if (bone) loot.items.push(bone);
+        }
       } else {
         const drop = await maybeDropItem(session.mapKey, Math.min(3, floorIndex + 1 + (floor.scaling?.tierBonus || 0)), false, { dungeon: true, playerClass: player.class, dropBonusPct: buff.drop || 0 });
         if (drop && !SHOP_ONLY_KEYS.has(drop.key)) {
