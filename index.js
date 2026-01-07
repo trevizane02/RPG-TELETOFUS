@@ -535,6 +535,15 @@ function formatItemPreview(item) {
   return parts.length ? ` (${parts.join(", ")})` : "";
 }
 
+function describeShopItem(itemKey) {
+  const descs = {
+    elixir_xp: "📘 +10% XP por 30 minutos",
+    elixir_drop: "🍀 +10% chance de drop por 30 minutos",
+    energy_potion_pack: "⚡ Contém 3x Poção de Energia",
+  };
+  return descs[itemKey] || "";
+}
+
 function formatRolledStats(rolled) {
   if (!rolled) return "";
   const parts = [];
@@ -583,7 +592,11 @@ async function renderShopBuyList(ctx, player, shopKey) {
   if (!items.length) {
     return ctx.reply("Nenhum item disponível nesta loja agora.");
   }
-  const lines = items.map((i) => `• ${escapeHtml(i.name)} — ${formatPrice(i.buy_price, i.currency)}`);
+  const lines = items.map((i) => {
+    const extra = describeShopItem(i.item_key);
+    const price = formatPrice(i.buy_price, i.currency);
+    return `• ${escapeHtml(i.name)} — ${price}${extra ? `\n  ${escapeHtml(extra)}` : ""}`;
+  });
   const keyboard = items.map((i) => [Markup.button.callback(`${i.name} (${i.buy_price})`, `shop_item:${shopKey}:${i.item_key}`)]);
   keyboard.push([Markup.button.callback("⬅️ Loja", `shop_open:${shopKey}`)]);
   const text = `<b>${escapeHtml(def.name)}</b>\n🛒 <b>Comprar</b>\n\n${lines.join("\n")}`;
@@ -611,12 +624,17 @@ async function renderShopItemDetail(ctx, player, shopKey, itemKey) {
   const stockText = item.stock ? `Estoque: ${item.stock}` : "Estoque: ∞";
   const stats = formatItemPreview(item);
   const info = currencyLabel(item.currency);
-  const detail = `<b>${escapeHtml(item.name)}</b>${stats}\nPreço: ${priceText}\n${stockText}\n\n${shopBalanceHtml(player)}`;
+  const extra = describeShopItem(item.item_key);
+  const detail = `<b>${escapeHtml(item.name)}</b>${stats}\n${extra ? `${escapeHtml(extra)}\n` : ""}Preço: ${priceText}\n${stockText}\n\n${shopBalanceHtml(player)}`;
   const keyboard = [
     [Markup.button.callback(`Comprar 1 (${info.icon}${item.buy_price})`, `shop_buy:${shopKey}:${itemKey}:1`)],
     [Markup.button.callback(`Comprar 5 (${info.icon}${item.buy_price * 5})`, `shop_buy:${shopKey}:${itemKey}:5`)],
     [Markup.button.callback("⬅️ Voltar", `shop_buylist:${shopKey}`), Markup.button.callback("🏪 Lojas", "loja_menu")],
   ];
+  const fileId = SHOP_IMAGES[itemKey] || null;
+  if (fileId) {
+    return sendCard(ctx, { fileId, caption: detail, keyboard, parse_mode: "HTML" });
+  }
   return ctx.reply(detail, { parse_mode: "HTML", reply_markup: Markup.inlineKeyboard(keyboard).reply_markup });
 }
 
