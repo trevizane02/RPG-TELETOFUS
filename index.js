@@ -380,14 +380,26 @@ function getActiveBuff(player) {
 }
 
 async function applyTempBuff(playerId, buff, minutes = 30) {
+  const current = await pool.query(
+    "SELECT temp_atk_buff, temp_def_buff, temp_crit_buff, temp_xp_buff, temp_drop_buff FROM players WHERE id = $1",
+    [playerId]
+  );
+  const row = current.rows[0] || {};
   const expiresAt = new Date(Date.now() + minutes * 60000);
+  const newVals = {
+    atk: buff.atk ?? row.temp_atk_buff ?? 0,
+    def: buff.def ?? row.temp_def_buff ?? 0,
+    crit: buff.crit ?? row.temp_crit_buff ?? 0,
+    xp: buff.xp ?? row.temp_xp_buff ?? 0,
+    drop: buff.drop ?? row.temp_drop_buff ?? 0,
+  };
   await pool.query(
     `
     UPDATE players
     SET temp_atk_buff = $1, temp_def_buff = $2, temp_crit_buff = $3, temp_xp_buff = $4, temp_drop_buff = $5, temp_buff_expires_at = $6
     WHERE id = $7
   `,
-    [buff.atk || 0, buff.def || 0, buff.crit || 0, buff.xp || 0, buff.drop || 0, expiresAt, playerId]
+    [newVals.atk, newVals.def, newVals.crit, newVals.xp, newVals.drop, expiresAt, playerId]
   );
   return expiresAt;
 }
@@ -1153,6 +1165,19 @@ async function renderMenu(ctx) {
 
   const vipActive = isVip(player);
   const vipLine = vipActive ? `🪪 VIP até ${formatDateShort(player.vip_until)}` : "🪪 Status: Free";
+  const buff = getActiveBuff(player);
+  const buffText =
+    buff && (buff.atk || buff.def || buff.crit || buff.xp || buff.drop)
+      ? `🧪 Buff ativo: ${[
+          buff.atk ? `+${buff.atk} ATK` : "",
+          buff.def ? `+${buff.def} DEF` : "",
+          buff.crit ? `+${buff.crit}% CRIT` : "",
+          buff.xp ? `+${buff.xp}% XP` : "",
+          buff.drop ? `+${buff.drop}% Drop` : "",
+        ]
+          .filter(Boolean)
+          .join(" / ")} (${formatBuffRemaining(player.temp_buff_expires_at) || "até acabar"})`
+      : "";
 
   const captionLines = [
     `🏰 *${map.name}* (Lv ${map.level_min})`,
@@ -1163,9 +1188,7 @@ async function renderMenu(ctx) {
     `⚡ Energia: ${player.energy}/${player.energy_max} ${makeGreenBar(player.energy, player.energy_max, 8)} (regen a cada ${REGEN_MINUTES} min)`,
     `🗝️ Chaves de Masmorra: ${dungeonKeys}`,
     vipLine,
-    buff && (buff.atk || buff.def || buff.crit)
-      ? `🧪 Buff ativo: +${buff.atk || 0} ATK / +${buff.def || 0} DEF / +${buff.crit || 0}% CRIT (${formatBuffRemaining(player.temp_buff_expires_at) || "até acabar"})`
-      : "",
+    buffText,
     `💰 Gold: ${player.gold}`,
   ].filter(Boolean);
 
