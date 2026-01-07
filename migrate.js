@@ -585,7 +585,9 @@ export async function migrate() {
 
       await client.query(`
         WITH cte AS (
-          SELECT inv.id, inv.player_id, inv.item_key,
+          SELECT inv.id,
+                 inv.player_id,
+                 inv.item_key,
                  ROW_NUMBER() OVER (PARTITION BY inv.player_id, inv.item_key ORDER BY COALESCE(inv.created_at, now()), inv.id) AS rn,
                  SUM(inv.qty) OVER (PARTITION BY inv.player_id, inv.item_key) AS total
           FROM inventory inv
@@ -593,7 +595,7 @@ export async function migrate() {
           WHERE i.slot = 'consumable'
         )
         UPDATE inventory inv
-        SET qty = c.total
+        SET qty = c.total, slot = 'consumable'
         FROM cte c
         WHERE inv.id = c.id
           AND c.rn = 1;
@@ -611,6 +613,30 @@ export async function migrate() {
         USING cte c
         WHERE inv.id = c.id
           AND c.rn > 1;
+      `);
+
+      // dedup robusto (safety) antes do índice
+      await client.query(`
+        WITH agg AS (
+          SELECT player_id, item_key, MIN(id) AS keep_id, SUM(qty) AS total
+          FROM inventory inv
+          WHERE slot = 'consumable'
+          GROUP BY player_id, item_key
+          HAVING COUNT(*) > 1 OR SUM(qty) > 1
+        )
+        UPDATE inventory inv
+        SET qty = agg.total
+        FROM agg
+        WHERE inv.id = agg.keep_id;
+      `);
+      await client.query(`
+        WITH dup AS (
+          SELECT inv.id
+          FROM inventory inv
+          JOIN agg ON agg.player_id = inv.player_id AND agg.item_key = inv.item_key
+          WHERE inv.id <> agg.keep_id AND inv.slot = 'consumable'
+        )
+        DELETE FROM inventory WHERE id IN (SELECT id FROM dup);
       `);
       
       // Create conditional unique index ONLY for consumables (allows stacking)
