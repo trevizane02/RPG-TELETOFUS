@@ -710,6 +710,7 @@ async function maybeDropItem(mapKey, difficulty = 1, isBoss = false, opts = {}) 
     if (item.class_req && playerClass && item.class_req !== playerClass) continue;
     if (item.class_req && !playerClass) continue;
     if (item.level_req && playerLevel != null && playerLevel < item.level_req) continue;
+    if (!(Number(item.drop_rate || 0) > 0)) continue;
     let base = Number(item.drop_rate || 0.01);
     if (dungeon && item.slot === "key") {
       base *= 0.5; // reduz chave em dungeon

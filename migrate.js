@@ -861,8 +861,8 @@ export async function migrate() {
         { item_key: 'hunting_bow', currency: 'gold', buy_price: 110, sell_price: 32 },
         
         // VIP/Premium (Tofus - moeda premium)
-        { item_key: 'elixir_xp', currency: 'tofus', buy_price: 10, sell_price: null },
-        { item_key: 'elixir_drop', currency: 'tofus', buy_price: 10, sell_price: null },
+        { item_key: 'elixir_xp', currency: 'tofus', buy_price: 5, sell_price: null },
+        { item_key: 'elixir_drop', currency: 'tofus', buy_price: 5, sell_price: null },
         { item_key: 'energy_potion_pack', currency: 'tofus', buy_price: 10, sell_price: null },
       ];
       
