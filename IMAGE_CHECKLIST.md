@@ -108,6 +108,7 @@ Guia rápido de upload:
 - [ ] elixir_xp | Elixir de Sabedoria (consumable)
 - [ ] elixir_drop | Elixir da Fortuna (consumable)
 - [ ] energy_potion_pack | Pacote de Energia (3) (consumable, loja Tofus)
+- [ ] bone_key | Chave de Ossos (key, dungeon especial)
 
 ## Eventos / Capas
 - [ok] loot_gold | Imagem genérica para drop de gold

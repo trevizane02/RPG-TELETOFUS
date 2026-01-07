@@ -2555,6 +2555,7 @@ registerDungeon(bot, {
   consumeItem,
   awardItem,
   STATES,
+  getLevelFromTotalXp,
 });
 
 registerArena(bot, {

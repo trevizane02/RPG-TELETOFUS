@@ -17,6 +17,7 @@ export function registerDungeon(bot, deps) {
     consumeItem,
     awardItem,
     STATES,
+    getLevelFromTotalXp,
   } = deps;
 
   const SHOP_ONLY_KEYS = new Set(["elixir_xp", "elixir_drop", "energy_potion_pack"]);
@@ -43,7 +44,7 @@ export function registerDungeon(bot, deps) {
   const DUNGEON_DEFS = {
     plains: { name: "Masmorra da Planície", rooms: 3, xp: [400, 500, 600, 900], key: "dungeon_key", boneChance: 0.01, imageKey: "dungeon_plains" },
     forest: { name: "Masmorra da Floresta", rooms: 3, xp: [600, 800, 1000, 1400], key: "dungeon_key", boneChance: 0.01, imageKey: "dungeon_forest" },
-    swamp: { name: "Masmorra do Pântano", rooms: 3, xp: [900, 1100, 1300, 2200], key: "dungeon_key", boneChance: 0.015, imageKey: "dungeon_swamp" },
+    swamp: { name: "Masmorra do Pântano", rooms: 3, xp: [900, 1100, 1300, 2200], key: "dungeon_key", boneChance: 0.01, imageKey: "dungeon_swamp" },
     special: { name: "Masmorra Especial", rooms: 3, xp: [1200, 1600, 2000, 3200], key: "bone_key", boneChance: 0.1, imageKey: "dungeon_special" },
   };
 
@@ -152,6 +153,18 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
   async function createSession(ctx, password = null) {
     const base = await ensureSession(ctx);
     if (!base) return;
+    const lvlInfo = await getLevelFromTotalXp(base.player.xp_total);
+    if (base.def.key === "bone_key" && lvlInfo.level < 22) {
+      await ctx.reply("🚫 Requer nível 22 para a Masmorra Especial.");
+      return;
+    }
+    if (base.def.key === "bone_key") {
+      if (!(await hasItemQty(base.player.id, "bone_key", 1))) {
+        await ctx.reply("Você precisa de 1 Chave de Ossos para criar a Masmorra Especial.");
+        return;
+      }
+      await consumeItem(base.player.id, "bone_key", 1);
+    }
     const code = genCode();
     const stats = await getPlayerStats(base.player);
     const session = {
@@ -409,12 +422,12 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
     }
 
     for (const uid of aliveMembers) {
-      const member = session.memberData.get(uid);
-      const player = await getPlayer(uid);
-      const buff = getPlayerBuff(player);
-      const contrib = contribMap.get(uid) || 0;
-      const xpShare = contribSum > 0 ? Math.max(1, Math.floor((xpTotal * contrib) / contribSum)) : Math.max(1, Math.floor(xpTotal / Math.max(1, aliveMembers.length)));
-      const xpShareBuffed = Math.round(xpShare * (1 + (buff.xp || 0) / 100));
+    const member = session.memberData.get(uid);
+    const player = await getPlayer(uid);
+    const buff = getPlayerBuff(player);
+    const contrib = contribMap.get(uid) || 0;
+    const xpShare = contribSum > 0 ? Math.max(1, Math.floor((xpTotal * contrib) / contribSum)) : Math.max(1, Math.floor(xpTotal / Math.max(1, aliveMembers.length)));
+    const xpShareBuffed = Math.round(xpShare * (1 + (buff.xp || 0) / 100));
       let gold = randInt(1, floor.isBoss ? 300 : 100);
       gold = Math.round(gold * (floor.scaling?.goldMult || 1) * partyMult);
 
@@ -432,20 +445,31 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
 
         const dropCount = randInt(1, 4);
         for (let i = 0; i < dropCount; i++) {
-        const drop = await maybeDropItem(session.mapKey, Math.min(4, floorIndex + 2), true, { dungeon: true, playerClass: player.class, dropBonusPct: buff.drop || 0 });
-        if (drop && !SHOP_ONLY_KEYS.has(drop.key)) {
-          await awardItem(player.id, drop);
-          loot.items.push(drop);
-          if (!session.bestDrop || compareRarity(drop.rarity, session.bestDrop.rarity) > 0) {
-            session.bestDrop = drop;
+          const drop = await maybeDropItem(session.mapKey, Math.min(4, floorIndex + 2), true, { dungeon: true, playerClass: player.class, dropBonusPct: buff.drop || 0 });
+          if (drop && !SHOP_ONLY_KEYS.has(drop.key)) {
+            await awardItem(player.id, drop);
+            loot.items.push(drop);
+            if (!session.bestDrop || compareRarity(drop.rarity, session.bestDrop.rarity) > 0) {
+              session.bestDrop = drop;
+            }
           }
-        }
         }
 
         const boneChance = session.def.boneChance || 0.02;
         if (Math.random() < boneChance) {
           const bone = await giveItemByKey(player.id, "bone_key", 1);
           if (bone) loot.items.push(bone);
+        }
+        if (session.mapKey === "swamp" && Math.random() < 0.01) {
+          const bone = await giveItemByKey(player.id, "bone_key", 1);
+          if (bone) loot.items.push(bone);
+        }
+        if (session.mapKey === "special" && Math.random() < 0.05) {
+          const graveDrop = await maybeDropItem("grave", 3, true, { dungeon: true, playerClass: player.class, dropBonusPct: buff.drop || 0 });
+          if (graveDrop && !SHOP_ONLY_KEYS.has(graveDrop.key)) {
+            await awardItem(player.id, graveDrop);
+            loot.items.push(graveDrop);
+          }
         }
       } else {
         const drop = await maybeDropItem(session.mapKey, Math.min(3, floorIndex + 1 + (floor.scaling?.tierBonus || 0)), false, { dungeon: true, playerClass: player.class, dropBonusPct: buff.drop || 0 });

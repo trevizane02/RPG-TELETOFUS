@@ -49,6 +49,7 @@ export const ITEM_SEEDS = [
 
   // Dungeon key
   { key: "dungeon_key", name: "Chave de Masmorra", slot: "key", rarity: "rare", drop_rate: 0.012, map_key: null, boss_only: true },
+  { key: "bone_key", name: "Chave de Ossos", slot: "key", rarity: "rare", drop_rate: 0, map_key: null },
 
   // Consumables
   { key: "health_potion", name: "Poção de Vida", slot: "consumable", rarity: "common", drop_rate: 0.05, map_key: null },
