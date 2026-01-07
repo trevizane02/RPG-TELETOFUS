@@ -611,7 +611,7 @@ async function renderShopItemDetail(ctx, player, shopKey, itemKey) {
   const res = await pool.query(
     `
     SELECT s.*, i.name, i.slot, i.rarity,
-           i.atk_min, i.atk_max, i.def_min, i.def_max, i.hp_min, i.hp_max, i.crit_min, i.crit_max
+           i.atk_min, i.atk_max, i.def_min, i.def_max, i.hp_min, i.hp_max, i.crit_min, i.crit_max, i.image_file_id
     FROM shop_items s
     JOIN items i ON i.key = s.item_key
     WHERE s.item_key = $1 AND s.available = TRUE AND s.buy_price IS NOT NULL
@@ -621,7 +621,7 @@ async function renderShopItemDetail(ctx, player, shopKey, itemKey) {
   if (!res.rows.length) return ctx.reply("❌ Item não encontrado ou indisponível.");
   const item = res.rows[0];
   const priceText = formatPrice(item.buy_price, item.currency);
-  const stockText = item.stock ? `Estoque: ${item.stock}` : "Estoque: ∞";
+  const stockText = item.stock === null || item.stock === undefined || item.stock < 0 ? "Estoque: ∞" : `Estoque: ${item.stock}`;
   const stats = formatItemPreview(item);
   const info = currencyLabel(item.currency);
   const extra = describeShopItem(item.item_key);
@@ -631,7 +631,7 @@ async function renderShopItemDetail(ctx, player, shopKey, itemKey) {
     [Markup.button.callback(`Comprar 5 (${info.icon}${item.buy_price * 5})`, `shop_buy:${shopKey}:${itemKey}:5`)],
     [Markup.button.callback("⬅️ Voltar", `shop_buylist:${shopKey}`), Markup.button.callback("🏪 Lojas", "loja_menu")],
   ];
-  const fileId = SHOP_IMAGES[itemKey] || null;
+  const fileId = item.image_file_id || SHOP_IMAGES[itemKey] || null;
   if (fileId) {
     return sendCard(ctx, { fileId, caption: detail, keyboard, parse_mode: "HTML" });
   }
