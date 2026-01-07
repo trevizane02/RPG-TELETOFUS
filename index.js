@@ -335,10 +335,11 @@ async function getPlayerStats(player) {
   );
 
   const bonus = res.rows[0] || { atk_bonus: 0, def_bonus: 0, hp_bonus: 0, crit_bonus: 0 };
+  const total_hp = Math.max(player.hp || 0, player.hp_max + Number(bonus.hp_bonus || 0) + lvlHp);
   return {
     total_atk: player.base_atk + Number(bonus.atk_bonus || 0) + (buff.atk || 0) + lvlAtk,
     total_def: player.base_def + Number(bonus.def_bonus || 0) + (buff.def || 0) + lvlDef,
-    total_hp: player.hp_max + Number(bonus.hp_bonus || 0) + lvlHp,
+    total_hp,
     total_crit: player.base_crit + Number(bonus.crit_bonus || 0) + (buff.crit || 0) + lvlCrit,
     gear_atk: Number(bonus.atk_bonus || 0),
     gear_def: Number(bonus.def_bonus || 0),
