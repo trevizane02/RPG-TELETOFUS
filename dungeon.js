@@ -555,6 +555,8 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
       } else if (action.action === "defend") {
         defenders.push({ uid, defBonus: action.defBonus || 0 });
         const md = session.memberData.get(uid);
+        // crédito de defesa conta para XP, mesmo se o mob não bater nele
+        session.contribution.set(uid, (session.contribution.get(uid) || 0) + (action.defBonus || 0));
         turnEvents.push(`🛡️ ${md.name} defende (+${action.defBonus || 0} DEF)`);
       } else if (action.action === "cons" && action.itemKey) {
         await useConsumable(player, action.itemKey);
@@ -937,7 +939,10 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
         return ctx.answerCbQuery("❌ Você precisa de um ESCUDO equipado para defender!", { show_alert: true });
       }
       const shield = hasShield.rows[0];
-      session.playerActions.set(uid, { action: "defend", icon: ACTION_ICONS.defend, defBonus: Math.floor(shield.rolled_def * 0.5) });
+      const player = await getPlayer(uid);
+      const stats = await getPlayerStats(player);
+      const defBonus = Math.max(1, Math.floor(stats.total_def * 0.5));
+      session.playerActions.set(uid, { action: "defend", icon: ACTION_ICONS.defend, defBonus });
       await ctx.answerCbQuery("🛡️ Defendendo! (+50% DEF)").catch(() => {});
       await updateDungeonScreen(session);
       if (session.playerActions.size >= aliveCount(session) && !session.resolvingTurn) await resolveCombatTurn(session);
