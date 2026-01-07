@@ -574,7 +574,7 @@ export async function migrate() {
       // Drop old unique index if exists
       await client.query(`DROP INDEX IF EXISTS inventory_player_item_key`);
       
-      // Normaliza slot consumível e deduplica stacks antes de recriar índice (drop qualquer parcial antiga)
+      -- Drop any existing consumable stack index/constraints to avoid conflicts
       await client.query(`
         DO $$
         DECLARE r RECORD;

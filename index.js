@@ -1857,7 +1857,8 @@ bot.command("descansar", async (ctx) => {
   const player = await getPlayer(userId, ctx.from.first_name);
   const stats = await getPlayerStats(player);
   if (player.energy < 1) return ctx.reply("⚠️ Sem energia para descansar.");
-  await pool.query("UPDATE players SET energy = energy - 1, hp = $1 WHERE id = $2", [stats.total_hp, player.id]);
+  const targetHp = Math.round(stats.total_hp || 0);
+  await pool.query("UPDATE players SET energy = energy - 1, hp = $1 WHERE id = $2", [targetHp, player.id]);
   return renderEnergy(ctx);
 });
 
@@ -1869,7 +1870,8 @@ bot.action("descansar", async (ctx) => {
     await ctx.answerCbQuery("Sem energia");
     return renderEnergy(ctx);
   }
-  await pool.query("UPDATE players SET energy = energy - 1, hp = $1 WHERE id = $2", [stats.total_hp, player.id]);
+  const targetHp = Math.round(stats.total_hp || 0);
+  await pool.query("UPDATE players SET energy = energy - 1, hp = $1 WHERE id = $2", [targetHp, player.id]);
   await ctx.answerCbQuery("Descansou");
   return renderEnergy(ctx);
 });
