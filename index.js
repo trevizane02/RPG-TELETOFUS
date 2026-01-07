@@ -1167,7 +1167,6 @@ async function renderMenu(ctx) {
 
   const vipActive = isVip(player);
   const vipLine = vipActive ? `🪪 VIP até ${formatDateShort(player.vip_until)}` : "🪪 Status: Free";
-  const buff = getActiveBuff(player);
   const buffText =
     buff && (buff.atk || buff.def || buff.crit || buff.xp || buff.drop)
       ? `🧪 Buff ativo: ${[
