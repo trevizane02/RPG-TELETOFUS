@@ -409,9 +409,10 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
 
       if (floor.isBoss) {
         const hpPotQty = randInt(1, 5);
-        const enPotQty = randInt(1, 3);
+        const dropEnergy = Math.random() < 0.5;
+        const enPotQty = dropEnergy ? randInt(1, 2) : 0;
         const hpItem = await giveItemByKey(player.id, "health_potion", hpPotQty);
-        const enItem = await giveItemByKey(player.id, "energy_potion", enPotQty);
+        const enItem = dropEnergy ? await giveItemByKey(player.id, "energy_potion", enPotQty) : null;
         if (hpItem) loot.items.push({ name: `${hpItem.name} x${hpPotQty}`, rarity: hpItem.rarity });
         if (enItem) loot.items.push({ name: `${enItem.name} x${enPotQty}`, rarity: enItem.rarity });
 

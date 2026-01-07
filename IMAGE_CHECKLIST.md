@@ -73,7 +73,6 @@ Guia rápido de upload:
 - [ok] leather_armor | Armadura de Couro (armor, plains)
 - [ok] mage_staff | Cajado do Aprendiz (weapon, forest)
 - [ok] plate_armor | Armadura de Placas (armor, mountain)
-- [ ] ring_protect | Anel de Proteção (ring, grave)
 - [ ] sabre | Sabre (weapon, forest)
 - [ok] short_sword | Espada Curta (weapon, plains)
 - [ ] steel_shield | Escudo de Aço (shield, forest)

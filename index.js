@@ -67,7 +67,7 @@ const SHOP_DEFS = {
   },
   castelo: {
     name: "Loja do Castelo",
-    items: ["amulet_health", "ring_protect"],
+    items: ["amulet_health"],
   },
 };
 
@@ -692,11 +692,19 @@ async function maybeDropItem(mapKey, difficulty = 1, isBoss = false, opts = {}) 
     if (item.class_req && playerClass && item.class_req !== playerClass) continue;
     if (item.class_req && !playerClass) continue;
     if (item.level_req && playerLevel != null && playerLevel < item.level_req) continue;
-    const base = Number(item.drop_rate || 0.01);
+    let base = Number(item.drop_rate || 0.01);
+    if (dungeon && item.slot === "key") {
+      base *= 0.5; // reduz chave em dungeon
+    }
     const difficultyBonus = 1 + Math.max(0, difficulty - 1) * 0.35;
-    const bonusFactor =
-      isBoss && ["rare", "epic", "legendary"].includes(item.rarity || "common") ? 4 : 1;
-    const chance = Math.min(0.6, base * difficultyBonus * bonusFactor);
+    const bossFactor = isBoss
+      ? item.class_req
+        ? 1.75
+        : ["rare", "epic", "legendary"].includes(item.rarity || "common")
+        ? 4
+        : 1
+      : 1;
+    const chance = Math.min(0.6, base * difficultyBonus * bossFactor);
     if (Math.random() < chance) drops.push(item);
   }
 

@@ -12,27 +12,27 @@ export const ITEM_SEEDS = [
   { key: "arcane_wand", name: "Varinha Arcana", slot: "weapon", rarity: "uncommon", atk_min: 3, atk_max: 7, crit_min: 2, crit_max: 5, drop_rate: 0.015, map_key: "abyss" },
   { key: "crystal_staff", name: "Cajado de Cristal", slot: "weapon", rarity: "rare", atk_min: 4, atk_max: 7, crit_min: 2, crit_max: 4, drop_rate: 0.01, map_key: "swamp" },
   // Grave class weapons
-  { key: "grave_war_sword", name: "Espada Tumular", slot: "weapon", rarity: "rare", atk_min: 4, atk_max: 8, crit_min: 0, crit_max: 2, drop_rate: 0.0007, map_key: "grave", class_req: "guerreiro", level_req: 23 },
-  { key: "grave_arc_bow", name: "Arco dos Ossos", slot: "weapon", rarity: "rare", atk_min: 4, atk_max: 7, crit_min: 3, crit_max: 6, drop_rate: 0.0007, map_key: "grave", class_req: "arqueiro", level_req: 22 },
-  { key: "grave_mag_wand", name: "Varinha Fúnebre", slot: "weapon", rarity: "rare", atk_min: 4, atk_max: 8, crit_min: 2, crit_max: 5, drop_rate: 0.0007, map_key: "grave", class_req: "mago", level_req: 24 },
+  { key: "grave_war_sword", name: "Espada Tumular", slot: "weapon", rarity: "rare", atk_min: 5, atk_max: 9, crit_min: 0, crit_max: 2, drop_rate: 0.0024, map_key: "grave", class_req: "guerreiro", level_req: 23 },
+  { key: "grave_arc_bow", name: "Arco dos Ossos", slot: "weapon", rarity: "rare", atk_min: 5, atk_max: 8, crit_min: 4, crit_max: 7, drop_rate: 0.0024, map_key: "grave", class_req: "arqueiro", level_req: 22 },
+  { key: "grave_mag_wand", name: "Varinha Fúnebre", slot: "weapon", rarity: "rare", atk_min: 5, atk_max: 9, crit_min: 3, crit_max: 6, drop_rate: 0.0024, map_key: "grave", class_req: "mago", level_req: 24 },
 
   // Armors
   { key: "leather_armor", name: "Armadura de Couro", slot: "armor", rarity: "common", def_min: 1, def_max: 3, hp_min: 0, hp_max: 5, drop_rate: 0.03, map_key: "plains" },
   { key: "chain_armor", name: "Cota de Malha", slot: "armor", rarity: "uncommon", def_min: 2, def_max: 5, hp_min: 0, hp_max: 8, drop_rate: 0.02, map_key: "forest" },
   { key: "plate_armor", name: "Armadura de Placas", slot: "armor", rarity: "rare", def_min: 3, def_max: 6, hp_min: 6, hp_max: 10, drop_rate: 0.01, map_key: "swamp" },
   // Grave class armors
-  { key: "grave_war_plate", name: "Couraça do Sepultador", slot: "armor", rarity: "rare", def_min: 3, def_max: 6, hp_min: 6, hp_max: 12, drop_rate: 0.0007, map_key: "grave", class_req: "guerreiro", level_req: 23 },
-  { key: "grave_arc_leather", name: "Gibão do Corvo", slot: "armor", rarity: "rare", def_min: 2, def_max: 4, hp_min: 4, hp_max: 10, drop_rate: 0.0007, map_key: "grave", class_req: "arqueiro", level_req: 22 },
-  { key: "grave_mag_robe", name: "Manto do Lamento", slot: "armor", rarity: "rare", def_min: 0, def_max: 2, hp_min: 10, hp_max: 18, drop_rate: 0.0007, map_key: "grave", class_req: "mago", level_req: 24 },
+  { key: "grave_war_plate", name: "Couraça do Sepultador", slot: "armor", rarity: "rare", def_min: 4, def_max: 7, hp_min: 10, hp_max: 16, drop_rate: 0.0024, map_key: "grave", class_req: "guerreiro", level_req: 23 },
+  { key: "grave_arc_leather", name: "Gibão do Corvo", slot: "armor", rarity: "rare", def_min: 3, def_max: 5, hp_min: 8, hp_max: 14, drop_rate: 0.0024, map_key: "grave", class_req: "arqueiro", level_req: 22 },
+  { key: "grave_mag_robe", name: "Manto do Lamento", slot: "armor", rarity: "rare", def_min: 1, def_max: 3, hp_min: 12, hp_max: 20, drop_rate: 0.0024, map_key: "grave", class_req: "mago", level_req: 24 },
 
   // Shields
   { key: "wooden_shield", name: "Escudo de Madeira", slot: "shield", rarity: "common", def_min: 1, def_max: 3, hp_min: 0, hp_max: 3, drop_rate: 0.03, map_key: "plains" },
   { key: "steel_shield", name: "Escudo de Aço", slot: "shield", rarity: "uncommon", def_min: 2, def_max: 5, hp_min: 0, hp_max: 5, drop_rate: 0.02, map_key: "forest" },
   { key: "tower_shield", name: "Escudo Torre", slot: "shield", rarity: "rare", def_min: 3, def_max: 6, hp_min: 1, hp_max: 6, drop_rate: 0.01, map_key: "swamp" },
   // Grave class shields
-  { key: "grave_war_shield", name: "Escudo do Mausoléu", slot: "shield", rarity: "rare", def_min: 3, def_max: 6, hp_min: 2, hp_max: 6, drop_rate: 0.0007, map_key: "grave", class_req: "guerreiro", level_req: 23 },
-  { key: "grave_arc_buckler", name: "Broquel Silencioso", slot: "shield", rarity: "rare", def_min: 2, def_max: 4, hp_min: 1, hp_max: 4, drop_rate: 0.0007, map_key: "grave", class_req: "arqueiro", level_req: 22 },
-  { key: "grave_mag_talisman", name: "Égide Ritual", slot: "shield", rarity: "rare", def_min: 1, def_max: 3, hp_min: 4, hp_max: 8, drop_rate: 0.0007, map_key: "grave", class_req: "mago", level_req: 24 },
+  { key: "grave_war_shield", name: "Escudo do Mausoléu", slot: "shield", rarity: "rare", def_min: 4, def_max: 7, hp_min: 3, hp_max: 8, drop_rate: 0.0024, map_key: "grave", class_req: "guerreiro", level_req: 23 },
+  { key: "grave_arc_buckler", name: "Broquel Silencioso", slot: "shield", rarity: "rare", def_min: 3, def_max: 5, hp_min: 2, hp_max: 6, drop_rate: 0.0024, map_key: "grave", class_req: "arqueiro", level_req: 22 },
+  { key: "grave_mag_talisman", name: "Égide Ritual", slot: "shield", rarity: "rare", def_min: 2, def_max: 4, hp_min: 6, hp_max: 10, drop_rate: 0.0024, map_key: "grave", class_req: "mago", level_req: 24 },
 
   // Acessórios (Plains) - somente boss de masmorra
   { key: "brass_ring", name: "Anel de Latão", slot: "ring", rarity: "uncommon", atk_min: 1, atk_max: 4, crit_min: 1, crit_max: 2, drop_rate: 0.01, map_key: "plains", boss_dungeon_only: true },
@@ -46,7 +46,6 @@ export const ITEM_SEEDS = [
 
   // Accessories
   { key: "amulet_health", name: "Amuleto Vital", slot: "amulet", rarity: "rare", hp_min: 15, hp_max: 30, drop_rate: 0.008, map_key: "desert" },
-  { key: "ring_protect", name: "Anel de Proteção", slot: "ring", rarity: "rare", def_min: 2, def_max: 5, drop_rate: 0.008, map_key: "grave" },
 
   // Dungeon key
   { key: "dungeon_key", name: "Chave de Masmorra", slot: "key", rarity: "rare", drop_rate: 0.012, map_key: null, boss_only: true },

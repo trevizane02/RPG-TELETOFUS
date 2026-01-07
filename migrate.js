@@ -854,7 +854,6 @@ export async function migrate() {
         
         // VIP/Premium (Tofus - moeda premium)
         { item_key: 'amulet_health', currency: 'tofus', buy_price: 100, sell_price: null },
-        { item_key: 'ring_protect', currency: 'tofus', buy_price: 100, sell_price: null },
       ];
       
       console.log("Seeding loja...");
