@@ -583,67 +583,32 @@ export async function migrate() {
         WHERE inv.item_key = i.key
           AND i.slot = 'consumable'
       `);
-
+      // mantém 1 linha por player/item e soma qty
       await client.query(`
-        WITH cte AS (
-          SELECT inv.id,
-                 inv.player_id,
-                 inv.item_key,
-                 ROW_NUMBER() OVER (PARTITION BY inv.player_id, inv.item_key ORDER BY COALESCE(inv.created_at, now()), inv.id) AS rn,
-                 SUM(inv.qty) OVER (PARTITION BY inv.player_id, inv.item_key) AS total
-          FROM inventory inv
-          JOIN items i ON i.key = inv.item_key
-          WHERE i.slot = 'consumable'
-        )
-        UPDATE inventory inv
-        SET qty = c.total, slot = 'consumable'
-        FROM cte c
-        WHERE inv.id = c.id
-          AND c.rn = 1;
-      `);
-
-      await client.query(`
-        WITH cte AS (
-          SELECT inv.id,
-                 ROW_NUMBER() OVER (PARTITION BY inv.player_id, inv.item_key ORDER BY COALESCE(inv.created_at, now()), inv.id) AS rn
-          FROM inventory inv
-          JOIN items i ON i.key = inv.item_key
-          WHERE i.slot = 'consumable'
-        )
-        DELETE FROM inventory inv
-        USING cte c
-        WHERE inv.id = c.id
-          AND c.rn > 1;
-      `);
-
-      // dedup robusto (safety) antes do índice
-      await client.query(`
-        WITH agg AS (
+        WITH keep AS (
           SELECT player_id, item_key, MIN(id) AS keep_id, SUM(qty) AS total
-          FROM inventory inv
+          FROM inventory
           WHERE slot = 'consumable'
           GROUP BY player_id, item_key
-          HAVING COUNT(*) > 1 OR SUM(qty) > 1
         )
         UPDATE inventory inv
-        SET qty = agg.total, slot = 'consumable'
-        FROM agg
-        WHERE inv.id = agg.keep_id;
+        SET qty = keep.total
+        FROM keep
+        WHERE inv.id = keep.keep_id;
       `);
       await client.query(`
-        WITH agg AS (
+        WITH keep AS (
           SELECT player_id, item_key, MIN(id) AS keep_id
           FROM inventory
           WHERE slot = 'consumable'
           GROUP BY player_id, item_key
-          HAVING COUNT(*) > 1
         )
         DELETE FROM inventory inv
-        USING agg
+        USING keep
         WHERE inv.slot = 'consumable'
-          AND inv.player_id = agg.player_id
-          AND inv.item_key = agg.item_key
-          AND inv.id <> agg.keep_id;
+          AND inv.player_id = keep.player_id
+          AND inv.item_key = keep.item_key
+          AND inv.id <> keep.keep_id;
       `);
       
       // Create conditional unique index ONLY for consumables (allows stacking)
