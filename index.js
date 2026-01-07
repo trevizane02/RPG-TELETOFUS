@@ -303,6 +303,23 @@ async function getMapList() {
 
 async function getPlayerStats(player) {
   const buff = getActiveBuff(player);
+  const lvlInfo = await getLevelFromTotalXp(player.xp_total);
+  const bonusLevels = Math.max(0, (lvlInfo?.level || 1) - 1);
+  let lvlAtk = 0;
+  let lvlDef = 0;
+  let lvlHp = 0;
+  let lvlCrit = 0;
+
+  if (player.class === "guerreiro") {
+    lvlDef = 0.5 * bonusLevels;
+    lvlHp = 0.5 * bonusLevels;
+  } else if (player.class === "arqueiro") {
+    lvlAtk = 0.5 * bonusLevels;
+    lvlCrit = 0.5 * bonusLevels;
+  } else if (player.class === "mago") {
+    lvlCrit = 1 * bonusLevels;
+  }
+
   const res = await pool.query(
     `
     SELECT 
@@ -319,10 +336,10 @@ async function getPlayerStats(player) {
 
   const bonus = res.rows[0] || { atk_bonus: 0, def_bonus: 0, hp_bonus: 0, crit_bonus: 0 };
   return {
-    total_atk: player.base_atk + Number(bonus.atk_bonus || 0) + (buff.atk || 0),
-    total_def: player.base_def + Number(bonus.def_bonus || 0) + (buff.def || 0),
-    total_hp: player.hp_max + Number(bonus.hp_bonus || 0),
-    total_crit: player.base_crit + Number(bonus.crit_bonus || 0) + (buff.crit || 0),
+    total_atk: player.base_atk + Number(bonus.atk_bonus || 0) + (buff.atk || 0) + lvlAtk,
+    total_def: player.base_def + Number(bonus.def_bonus || 0) + (buff.def || 0) + lvlDef,
+    total_hp: player.hp_max + Number(bonus.hp_bonus || 0) + lvlHp,
+    total_crit: player.base_crit + Number(bonus.crit_bonus || 0) + (buff.crit || 0) + lvlCrit,
     gear_atk: Number(bonus.atk_bonus || 0),
     gear_def: Number(bonus.def_bonus || 0),
     gear_hp: Number(bonus.hp_bonus || 0),
