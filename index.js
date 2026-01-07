@@ -682,10 +682,11 @@ async function useConsumable(player, itemKey) {
 
   if (key === "health_potion") {
     const stats = await getPlayerStats(player);
-    if (player.hp >= stats.total_hp) return { ok: false, message: "Seu HP já está cheio." };
-    await pool.query("UPDATE players SET hp = $1 WHERE id = $2", [stats.total_hp, player.id]);
+    const targetHp = Math.max(player.hp || 0, Math.round(stats.total_hp || 0));
+    if (player.hp >= targetHp) return { ok: false, message: "Seu HP já está cheio." };
+    await pool.query("UPDATE players SET hp = $1 WHERE id = $2", [targetHp, player.id]);
     await consumeItem(player.id, key, 1);
-    return { ok: true, message: `❤️ HP totalmente restaurado (${stats.total_hp}).` };
+    return { ok: true, message: `❤️ HP totalmente restaurado (${targetHp}).` };
   }
 
   if (key === "energy_potion") {
