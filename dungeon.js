@@ -932,6 +932,9 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
     } catch (e) {
       // ignore
     }
+    await bot.telegram
+      .sendMessage(userId, "Você saiu da masmorra.", { reply_markup: Markup.inlineKeyboard([[Markup.button.callback("🏠 Menu", "menu")]]).reply_markup })
+      .catch(() => {});
     if (session.ownerId === userId) {
       const next = [...session.members][0];
       if (next) session.ownerId = next;
