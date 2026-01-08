@@ -1362,6 +1362,18 @@ async function renderInventory(ctx, filter = "armas", page = 1) {
     const equipTag = i.equipped ? " ⭐" : "";
     return `${emoji} ${i.name}${qtyText}${statsText}${consumableText}${equipTag}`;
   };
+  const formatActionLabel = (i, actionText) => {
+    const rolled = [];
+    if (i.rolled_atk) rolled.push(`ATK+${i.rolled_atk}`);
+    if (i.rolled_def) rolled.push(`DEF+${i.rolled_def}`);
+    if (i.rolled_hp) rolled.push(`HP+${i.rolled_hp}`);
+    if (i.rolled_crit) rolled.push(`CRIT+${i.rolled_crit}`);
+    const statsText = rolled.length ? ` (${rolled.join(", ")})` : "";
+    const qtyText = i.qty > 1 ? ` x${i.qty}` : "";
+    const emoji = rarityEmoji[i.rarity] || "⚪";
+    const equipTag = i.equipped ? " ⭐" : "";
+    return `${emoji} ${actionText} ${i.name}${qtyText}${statsText}${equipTag}`;
+  };
 
   const equippedBySlot = (slot) => res.rows.find((r) => r.slot === slot && r.equipped);
   const equippedLine = (slot, label) => {
@@ -1414,9 +1426,11 @@ async function renderInventory(ctx, filter = "armas", page = 1) {
   const actionButtons = [];
   for (const i of slice) {
     if (["consumable"].includes(i.slot) && CONSUMABLE_EFFECTS[i.item_key]) {
-      actionButtons.push([Markup.button.callback(`Usar ${i.name} (${i.qty})`, `usec_${i.item_key}`)]);
+      actionButtons.push([Markup.button.callback(formatActionLabel(i, "Usar"), `usec_${i.item_key}`)]);
     } else if (["weapon", "armor", "shield", "boots", "ring", "amulet", "necklace"].includes(i.slot)) {
-      actionButtons.push([Markup.button.callback(`${i.equipped ? "Desequipar" : "Equipar"} ${i.name}`, `equip_${i.id}`)]);
+      actionButtons.push([
+        Markup.button.callback(formatActionLabel(i, i.equipped ? "Desequipar" : "Equipar"), `equip_${i.id}`),
+      ]);
     }
   }
 
