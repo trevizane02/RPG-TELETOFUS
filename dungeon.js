@@ -424,8 +424,8 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
       atkSum += contribAtk.get(uid) || 0;
       defSum += contribDef.get(uid) || 0;
     }
-    const atkWeight = 0.55;
-    const defWeight = 0.45;
+    const atkWeight = 0.7;
+    const defWeight = 0.3;
 
     for (const uid of aliveMembers) {
       const member = session.memberData.get(uid);
@@ -1050,6 +1050,14 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
     if (!result.ok) {
       await ctx.answerCbQuery(result.message || "Não foi possível usar.").catch(() => {});
       return;
+    }
+    const refreshed = await getPlayer(uid);
+    const stats = await getPlayerStats(refreshed);
+    const md = session.memberData.get(uid);
+    if (md) {
+      md.hp = refreshed.hp;
+      md.maxHp = stats.total_hp;
+      session.memberData.set(uid, md);
     }
     await deleteConsumablePrompt(session, uid);
     session.playerActions.set(uid, { action: "cons", icon: ACTION_ICONS.cons, itemKey });
