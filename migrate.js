@@ -602,29 +602,29 @@ export async function migrate() {
       // mantém 1 linha por player/item e soma qty
       await client.query(`
         WITH keep AS (
-          SELECT player_id, item_key, MIN(id) AS keep_id, SUM(qty) AS total
+          SELECT player_id, item_key, MIN(id::text) AS keep_id, SUM(qty) AS total
           FROM inventory
-          WHERE slot = 'consumable'
+          WHERE slot IN ('consumable', 'key')
           GROUP BY player_id, item_key
         )
         UPDATE inventory inv
         SET qty = keep.total
         FROM keep
-        WHERE inv.id = keep.keep_id;
+        WHERE inv.id::text = keep.keep_id;
       `);
       await client.query(`
         WITH keep AS (
-          SELECT player_id, item_key, MIN(id) AS keep_id
+          SELECT player_id, item_key, MIN(id::text) AS keep_id
           FROM inventory
-          WHERE slot = 'consumable'
+          WHERE slot IN ('consumable', 'key')
           GROUP BY player_id, item_key
         )
         DELETE FROM inventory inv
         USING keep
-        WHERE inv.slot = 'consumable'
+        WHERE inv.slot IN ('consumable', 'key')
           AND inv.player_id = keep.player_id
           AND inv.item_key = keep.item_key
-          AND inv.id <> keep.keep_id;
+          AND inv.id::text <> keep.keep_id;
       `);
       await client.query(`
         CREATE INDEX IF NOT EXISTS inventory_item_key_idx ON inventory(item_key)

@@ -370,11 +370,17 @@ export function registerVip({ bot, app, deps }) {
         const playerId = playerRes.rows[0].id;
 
         await pool.query("BEGIN");
-        await pool.query(
+        const insertRes = await pool.query(
           `INSERT INTO payments (payment_id, gateway, amount_brl, tofus, telegram_id, status, raw_payload)
-           VALUES ($1, 'mercadopago', $2, $3, $4, $5, $6)`,
+           VALUES ($1, 'mercadopago', $2, $3, $4, $5, $6)
+           ON CONFLICT (payment_id) DO NOTHING
+           RETURNING payment_id`,
           [String(payment.id), payment.transaction_amount || 0, packInfo.qty, String(ref.telegramId), payment.status, payment]
         );
+        if (!insertRes.rows.length) {
+          await pool.query("ROLLBACK");
+          return res.sendStatus(200);
+        }
         await pool.query("UPDATE players SET tofus = tofus + $1 WHERE id = $2", [packInfo.qty, playerId]);
         await pool.query("COMMIT");
 

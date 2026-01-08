@@ -24,6 +24,20 @@ export function registerTrade(bot, deps) {
     return Number(res.rows[0]?.qty || 0);
   }
 
+  async function getIncomingSlotDelta(playerId, offer) {
+    if (!offer || ["__gold", "__tofus"].includes(offer.item_key)) return 0;
+    if (offer.invIds?.length) return offer.invIds.length;
+    const itemRow = await getItemRow(offer.item_key);
+    if (!itemRow) return offer.qty || 0;
+    const stackable = ["consumable", "key"].includes(itemRow.slot);
+    if (!stackable) return offer.qty || 1;
+    const hasStack = await pool.query(
+      "SELECT 1 FROM inventory WHERE player_id = $1 AND item_key = $2 AND equipped = FALSE LIMIT 1",
+      [playerId, offer.item_key]
+    );
+    return hasStack.rows.length ? 0 : 1;
+  }
+
   function formatTradeItemLabel(item) {
     const rarityIcon = {
       common: "🟢",
@@ -618,7 +632,8 @@ export function registerTrade(bot, deps) {
         `, [guest.id]);
         const guestSlots = parseInt(guestSlotsRes.rows[0]?.used || 0);
         const guestMax = parseInt(guestSlotsRes.rows[0]?.max || 20);
-        if (guestSlots + ownerOffer.qty > guestMax) {
+        const incomingSlots = await getIncomingSlotDelta(guest.id, ownerOffer);
+        if (guestSlots + incomingSlots > guestMax) {
           session.confirmed = { owner: false, guest: false };
           return ctx.answerCbQuery("Inventário do convidado está cheio!");
         }
@@ -635,7 +650,8 @@ export function registerTrade(bot, deps) {
         `, [owner.id]);
         const ownerSlots = parseInt(ownerSlotsRes.rows[0]?.used || 0);
         const ownerMax = parseInt(ownerSlotsRes.rows[0]?.max || 20);
-        if (ownerSlots + guestOffer.qty > ownerMax) {
+        const incomingSlots = await getIncomingSlotDelta(owner.id, guestOffer);
+        if (ownerSlots + incomingSlots > ownerMax) {
           session.confirmed = { owner: false, guest: false };
           return ctx.answerCbQuery("Inventário do dono está cheio!");
         }
@@ -682,11 +698,13 @@ export function registerTrade(bot, deps) {
           } else {
             await pool.query("DELETE FROM inventory WHERE id = $1", [stack.id]);
           }
-          const up = await pool.query(
-            "UPDATE inventory SET qty = qty + $1 WHERE player_id = $2 AND item_key = $3 AND slot = 'consumable' AND equipped = FALSE RETURNING id",
-            [ownerOffer.qty, guest.id, ownerOffer.item_key]
+          const destStack = await pool.query(
+            "SELECT id FROM inventory WHERE player_id = $1 AND item_key = $2 AND slot = 'consumable' AND equipped = FALSE ORDER BY qty DESC LIMIT 1",
+            [guest.id, ownerOffer.item_key]
           );
-          if (!up.rows.length) {
+          if (destStack.rows.length) {
+            await pool.query("UPDATE inventory SET qty = qty + $1 WHERE id = $2", [ownerOffer.qty, destStack.rows[0].id]);
+          } else {
             await pool.query(
               "INSERT INTO inventory (player_id, item_key, slot, qty, rolled_rarity, equipped) VALUES ($1, $2, 'consumable', $3, $4, FALSE)",
               [guest.id, ownerOffer.item_key, ownerOffer.qty, itemRow.rarity || null]
@@ -750,11 +768,13 @@ export function registerTrade(bot, deps) {
           } else {
             await pool.query("DELETE FROM inventory WHERE id = $1", [stack.id]);
           }
-          const up = await pool.query(
-            "UPDATE inventory SET qty = qty + $1 WHERE player_id = $2 AND item_key = $3 AND slot = 'consumable' AND equipped = FALSE RETURNING id",
-            [guestOffer.qty, owner.id, guestOffer.item_key]
+          const destStack = await pool.query(
+            "SELECT id FROM inventory WHERE player_id = $1 AND item_key = $2 AND slot = 'consumable' AND equipped = FALSE ORDER BY qty DESC LIMIT 1",
+            [owner.id, guestOffer.item_key]
           );
-          if (!up.rows.length) {
+          if (destStack.rows.length) {
+            await pool.query("UPDATE inventory SET qty = qty + $1 WHERE id = $2", [guestOffer.qty, destStack.rows[0].id]);
+          } else {
             await pool.query(
               "INSERT INTO inventory (player_id, item_key, slot, qty, rolled_rarity, equipped) VALUES ($1, $2, 'consumable', $3, $4, FALSE)",
               [owner.id, guestOffer.item_key, guestOffer.qty, itemRow.rarity || null]

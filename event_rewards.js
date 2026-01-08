@@ -14,7 +14,7 @@ export function registerEventRewards(bot, deps) {
   }
 
   async function getItemInfo(key) {
-    const res = await pool.query("SELECT key, name, image_file_id FROM items WHERE key = $1", [key]);
+    const res = await pool.query("SELECT * FROM items WHERE key = $1", [key]);
     return res.rows[0] || null;
   }
 

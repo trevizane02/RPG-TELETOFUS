@@ -825,12 +825,15 @@ async function awardItem(playerId, item) {
   const slotsUsed = parseInt(slotsRes.rows[0]?.used || 0);
   const slotsMax = parseInt(slotsRes.rows[0]?.max || 20);
 
-  // Se consumível, tenta stackar (não verifica slots ainda)
-  if (item.slot === 'consumable') {
+  const stackableSlots = new Set(["consumable", "key"]);
+  // Se consumível/chave, tenta stackar (não verifica slots ainda)
+  if (stackableSlots.has(item.slot)) {
     const existingRes = await pool.query(`
       SELECT id, qty FROM inventory
-      WHERE player_id = $1 AND item_key = $2 AND slot = 'consumable'
-    `, [playerId, item.key]);
+      WHERE player_id = $1 AND item_key = $2 AND slot = $3 AND equipped = FALSE
+      ORDER BY qty DESC
+      LIMIT 1
+    `, [playerId, item.key, item.slot]);
     
     if (existingRes.rows.length > 0) {
       // Stack existente, apenas incrementa qty

@@ -52,6 +52,7 @@ export function registerArena(bot, deps) {
   const { pool, getPlayer, getPlayerStats, makeBar, rollDamage, sendCard, setPlayerState, awardItem, STATES } = deps;
 
   const arenaQueue = []; // [{ id, queuedAt }]
+  let matchingArena = false;
   const arenaFights = new Map(); // userId -> fight data
   const exitPrompts = new Map(); // userId -> expires timestamp
   const rankImages = new Map(); // key -> file_id or null
@@ -380,62 +381,84 @@ export function registerArena(bot, deps) {
   });
 
   async function tryMatchArena() {
-    const now = Date.now();
-    const thresholdForWait = (waitMs) => {
-      if (waitMs >= 90000) return Infinity; // depois de 90s, libera geral
-      if (waitMs >= 60000) return 1200;
-      if (waitMs >= 30000) return 800;
-      return 300;
-    };
+    if (matchingArena) return;
+    matchingArena = true;
+    try {
+      const now = Date.now();
+      const thresholdForWait = (waitMs) => {
+        if (waitMs >= 90000) return Infinity; // depois de 90s, libera geral
+        if (waitMs >= 60000) return 1200;
+        if (waitMs >= 30000) return 800;
+        return 300;
+      };
 
-    while (arenaQueue.length >= 2) {
-      const entry = arenaQueue.shift();
-      const p1Id = entry.id;
-      const p1Wait = now - (entry.queuedAt || now);
-      const p1 = await getPlayer(p1Id);
-      if (!p1) continue;
-      const p1T = p1.trophies || 0;
-      const p1Rank = getRankByTrophies(p1T);
-      let candidates = [];
-      for (let i = 0; i < arenaQueue.length; i++) {
-        const candEntry = arenaQueue[i];
-        const candId = candEntry.id;
-        const cand = await getPlayer(candId);
-        if (!cand) continue;
-        const cT = cand.trophies || 0;
-        const cRank = getRankByTrophies(cT);
-        const sameRank = cRank.key === p1Rank.key;
-        const diff = Math.abs(cT - p1T);
-        const allowed = thresholdForWait(Math.max(p1Wait, now - (candEntry.queuedAt || now)));
-        if (sameRank || diff <= allowed) {
-          candidates.push({ idx: i, diff });
-        }
+      for (let i = arenaQueue.length - 1; i >= 0; i--) {
+        if (!arenaQueue[i]?.id) arenaQueue.splice(i, 1);
       }
-      if (!candidates.length) {
-        // Se não achou candidato dentro do limite mas já passou 60s, pega o mais próximo
-        if (p1Wait >= 60000 && arenaQueue.length > 0) {
-          let bestIdx = 0;
-          let bestDiff = Infinity;
-          for (let i = 0; i < arenaQueue.length; i++) {
-            const cand = await getPlayer(arenaQueue[i].id);
-            if (!cand) continue;
-            const diff = Math.abs((cand.trophies || 0) - p1T);
-            if (diff < bestDiff) {
-              bestDiff = diff;
-              bestIdx = i;
-            }
+
+      while (arenaQueue.length >= 2) {
+        const entry = arenaQueue.shift();
+        if (!entry?.id) continue;
+        const p1Id = entry.id;
+        const p1Wait = now - (entry.queuedAt || now);
+        const p1 = await getPlayer(p1Id);
+        if (!p1) continue;
+        const p1T = p1.trophies || 0;
+        const p1Rank = getRankByTrophies(p1T);
+        let candidates = [];
+        for (let i = 0; i < arenaQueue.length; i++) {
+          const candEntry = arenaQueue[i];
+          if (!candEntry?.id) continue;
+          const candId = candEntry.id;
+          const cand = await getPlayer(candId);
+          if (!cand) continue;
+          const cT = cand.trophies || 0;
+          const cRank = getRankByTrophies(cT);
+          const sameRank = cRank.key === p1Rank.key;
+          const diff = Math.abs(cT - p1T);
+          const allowed = thresholdForWait(Math.max(p1Wait, now - (candEntry.queuedAt || now)));
+          if (sameRank || diff <= allowed) {
+            candidates.push({ idx: i, diff });
           }
-          const [p2Entry] = arenaQueue.splice(bestIdx, 1);
-          await startArenaFight(p1Id, p2Entry.id);
-          continue;
         }
-        arenaQueue.unshift(entry);
-        return;
+        if (!candidates.length) {
+          // Se não achou candidato dentro do limite mas já passou 60s, pega o mais próximo
+          if (p1Wait >= 60000 && arenaQueue.length > 0) {
+            let bestIdx = 0;
+            let bestDiff = Infinity;
+            for (let i = 0; i < arenaQueue.length; i++) {
+              const candEntry = arenaQueue[i];
+              if (!candEntry?.id) continue;
+              const cand = await getPlayer(candEntry.id);
+              if (!cand) continue;
+              const diff = Math.abs((cand.trophies || 0) - p1T);
+              if (diff < bestDiff) {
+                bestDiff = diff;
+                bestIdx = i;
+              }
+            }
+            const [p2Entry] = arenaQueue.splice(bestIdx, 1);
+            if (!p2Entry?.id) {
+              arenaQueue.unshift(entry);
+              return;
+            }
+            await startArenaFight(p1Id, p2Entry.id);
+            continue;
+          }
+          arenaQueue.unshift(entry);
+          return;
+        }
+        candidates.sort((a, b) => a.diff - b.diff);
+        const bestIdx = candidates[0].idx;
+        const [p2Entry] = arenaQueue.splice(bestIdx, 1);
+        if (!p2Entry?.id) {
+          arenaQueue.unshift(entry);
+          return;
+        }
+        await startArenaFight(p1Id, p2Entry.id);
       }
-      candidates.sort((a, b) => a.diff - b.diff);
-      const bestIdx = candidates[0].idx;
-      const [p2Entry] = arenaQueue.splice(bestIdx, 1);
-      await startArenaFight(p1Id, p2Entry.id);
+    } finally {
+      matchingArena = false;
     }
   }
 
