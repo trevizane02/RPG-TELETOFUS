@@ -13,9 +13,9 @@ const SURRENDER_COINS = 3;
 const ARENA_MAX_SLOTS = 5;
 const ARENA_FREE_SLOTS = 1;
 const CHEST_CHANCES = {
-  common: 0.1, // 10%
-  uncommon: 0.02, // 2%
-  legendary: 0.0001, // 0.01%
+  common: 0.25, // 25%
+  uncommon: 0.08, // 8%
+  legendary: 0.002, // 0.2%
 };
 const CHEST_TIMERS_HOURS = {
   common: 4,
@@ -51,7 +51,7 @@ const CHEST_REWARDS = {
 export function registerArena(bot, deps) {
   const { pool, getPlayer, getPlayerStats, makeBar, rollDamage, sendCard, setPlayerState, awardItem, STATES } = deps;
 
-  const arenaQueue = [];
+  const arenaQueue = []; // [{ id, queuedAt }]
   const arenaFights = new Map(); // userId -> fight data
   const exitPrompts = new Map(); // userId -> expires timestamp
   const rankImages = new Map(); // key -> file_id or null
@@ -369,54 +369,73 @@ export function registerArena(bot, deps) {
       await ctx.answerCbQuery("Você já está lutando.");
       return;
     }
-    if (arenaQueue.includes(userId)) {
+    if (arenaQueue.some((e) => e.id === userId)) {
       await ctx.answerCbQuery("Você já está na fila.");
       return;
     }
-    arenaQueue.push(userId);
+    arenaQueue.push({ id: userId, queuedAt: Date.now() });
     await ctx.answerCbQuery("Fila da arena");
     await ctx.reply("⏳ Aguardando oponente na arena...", { reply_markup: Markup.inlineKeyboard([[Markup.button.callback("🏠 Menu", "menu")]]).reply_markup });
     await tryMatchArena();
   });
 
   async function tryMatchArena() {
+    const now = Date.now();
+    const thresholdForWait = (waitMs) => {
+      if (waitMs >= 90000) return Infinity; // depois de 90s, libera geral
+      if (waitMs >= 60000) return 1200;
+      if (waitMs >= 30000) return 800;
+      return 300;
+    };
+
     while (arenaQueue.length >= 2) {
-      const p1Id = arenaQueue.shift();
+      const entry = arenaQueue.shift();
+      const p1Id = entry.id;
+      const p1Wait = now - (entry.queuedAt || now);
       const p1 = await getPlayer(p1Id);
       if (!p1) continue;
       const p1T = p1.trophies || 0;
       const p1Rank = getRankByTrophies(p1T);
       let candidates = [];
       for (let i = 0; i < arenaQueue.length; i++) {
-        const candId = arenaQueue[i];
+        const candEntry = arenaQueue[i];
+        const candId = candEntry.id;
         const cand = await getPlayer(candId);
         if (!cand) continue;
         const cT = cand.trophies || 0;
         const cRank = getRankByTrophies(cT);
         const sameRank = cRank.key === p1Rank.key;
         const diff = Math.abs(cT - p1T);
-        if (sameRank || diff <= 300) {
+        const allowed = thresholdForWait(Math.max(p1Wait, now - (candEntry.queuedAt || now)));
+        if (sameRank || diff <= allowed) {
           candidates.push({ idx: i, diff });
         }
       }
       if (!candidates.length) {
-        // relax constraint to 600 troféus
-        for (let i = 0; i < arenaQueue.length; i++) {
-          const candId = arenaQueue[i];
-          const cand = await getPlayer(candId);
-          if (!cand) continue;
-          const diff = Math.abs((cand.trophies || 0) - p1T);
-          if (diff <= 600) candidates.push({ idx: i, diff });
+        // Se não achou candidato dentro do limite mas já passou 60s, pega o mais próximo
+        if (p1Wait >= 60000 && arenaQueue.length > 0) {
+          let bestIdx = 0;
+          let bestDiff = Infinity;
+          for (let i = 0; i < arenaQueue.length; i++) {
+            const cand = await getPlayer(arenaQueue[i].id);
+            if (!cand) continue;
+            const diff = Math.abs((cand.trophies || 0) - p1T);
+            if (diff < bestDiff) {
+              bestDiff = diff;
+              bestIdx = i;
+            }
+          }
+          const [p2Entry] = arenaQueue.splice(bestIdx, 1);
+          await startArenaFight(p1Id, p2Entry.id);
+          continue;
         }
-      }
-      if (!candidates.length) {
-        arenaQueue.unshift(p1Id);
+        arenaQueue.unshift(entry);
         return;
       }
       candidates.sort((a, b) => a.diff - b.diff);
       const bestIdx = candidates[0].idx;
-      const [p2Id] = arenaQueue.splice(bestIdx, 1);
-      await startArenaFight(p1Id, p2Id);
+      const [p2Entry] = arenaQueue.splice(bestIdx, 1);
+      await startArenaFight(p1Id, p2Entry.id);
     }
   }
 
