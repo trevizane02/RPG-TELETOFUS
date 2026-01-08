@@ -549,6 +549,38 @@ export async function migrate() {
           END IF;
         END $$;
       `);
+      // Remove legacy UNIQUE constraints and indexes that block stacking
+      await client.query(`
+        DO $$
+        DECLARE r RECORD;
+        BEGIN
+          -- drop named constraint if present
+          IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'inventory_player_id_item_key_key') THEN
+            ALTER TABLE inventory DROP CONSTRAINT inventory_player_id_item_key_key;
+          END IF;
+          IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'inventory_consumable_stack') THEN
+            ALTER TABLE inventory DROP CONSTRAINT inventory_consumable_stack;
+          END IF;
+          -- drop any constraint matching pattern
+          FOR r IN
+            SELECT conname FROM pg_constraint c
+            JOIN pg_class t ON c.conrelid = t.oid
+            WHERE t.relname = 'inventory' AND conname LIKE 'inventory_consumable_stack%'
+          LOOP
+            EXECUTE 'ALTER TABLE inventory DROP CONSTRAINT ' || quote_ident(r.conname);
+          END LOOP;
+          -- drop old indexes matching pattern
+          FOR r IN
+            SELECT indexname FROM pg_indexes WHERE tablename = 'inventory' AND indexname LIKE 'inventory_consumable_stack%'
+          LOOP
+            EXECUTE 'DROP INDEX IF EXISTS ' || quote_ident(r.indexname);
+          END LOOP;
+          -- drop legacy player/item unique index
+          IF EXISTS (SELECT 1 FROM pg_indexes WHERE tablename = 'inventory' AND indexname = 'inventory_player_item_key') THEN
+            DROP INDEX inventory_player_item_key;
+          END IF;
+        END $$;
+      `);
       
       // Backfill slot from items table
       await client.query(`
@@ -560,41 +592,6 @@ export async function migrate() {
       
       await client.query(`UPDATE inventory SET item_key = 'short_sword' WHERE item_key IS NULL`);
       await client.query(`ALTER TABLE inventory ALTER COLUMN item_key SET NOT NULL`);
-      
-      // Remove old UNIQUE constraint if exists
-      await client.query(`
-        DO $$
-        BEGIN
-          IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'inventory_player_id_item_key_key') THEN
-            ALTER TABLE inventory DROP CONSTRAINT inventory_player_id_item_key_key;
-          END IF;
-        END $$;
-      `);
-      
-      // Drop legacy unique constraint that blocks stacking
-      await client.query(`
-        DO $$
-        BEGIN
-          IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'inventory_consumable_stack') THEN
-            ALTER TABLE inventory DROP CONSTRAINT inventory_consumable_stack;
-          END IF;
-        END $$;
-      `);
-      
-      // Drop old unique index if exists
-      await client.query(`DROP INDEX IF EXISTS inventory_player_item_key`);
-      
-      await client.query(`
-        DO $$
-        DECLARE r RECORD;
-        BEGIN
-          FOR r IN
-            SELECT indexname FROM pg_indexes WHERE tablename = 'inventory' AND indexname LIKE 'inventory_consumable_stack%'
-          LOOP
-            EXECUTE 'DROP INDEX IF EXISTS ' || quote_ident(r.indexname);
-          END LOOP;
-        END $$;
-      `);
       await client.query(`
         UPDATE inventory inv
         SET slot = 'consumable'
