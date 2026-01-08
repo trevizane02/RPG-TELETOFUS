@@ -571,6 +571,16 @@ export async function migrate() {
         END $$;
       `);
       
+      // Drop legacy unique constraint that blocks stacking
+      await client.query(`
+        DO $$
+        BEGIN
+          IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'inventory_consumable_stack') THEN
+            ALTER TABLE inventory DROP CONSTRAINT inventory_consumable_stack;
+          END IF;
+        END $$;
+      `);
+      
       // Drop old unique index if exists
       await client.query(`DROP INDEX IF EXISTS inventory_player_item_key`);
       

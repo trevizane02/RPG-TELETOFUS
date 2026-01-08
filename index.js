@@ -124,6 +124,14 @@ const events = new Map(); // userId -> merchant pending
 const pendingUploads = new Map(); // chatId -> { type, key }
 const dungeons = new Map(); // code -> dungeon session
 
+const FILTER_LABELS = {
+  armas: "Armas",
+  armaduras: "Armaduras",
+  joias: "Joias",
+  consumiveis: "Consumíveis",
+  almas: "Almas",
+};
+
 // --------------------------------------
 // HELPERS
 // --------------------------------------
@@ -1291,10 +1299,16 @@ async function renderProfile(ctx) {
   if (ctx.callbackQuery) ctx.answerCbQuery();
 }
 
-async function renderInventory(ctx) {
+async function renderInventory(ctx, filter = "armas", page = 1) {
+  // Permite chamadas via callback inv:<filter>:<page>
+  if (ctx.match && ctx.match[1]) {
+    filter = ctx.match[1];
+    page = Number(ctx.match[2]) || 1;
+  }
   const userId = String(ctx.from.id);
   const player = await getPlayer(userId, ctx.from.first_name);
   await setPlayerState(player.id, STATES.INVENTORY);
+  const stats = await getPlayerStats(player);
 
   const res = await pool.query(
     `
@@ -1306,9 +1320,9 @@ async function renderInventory(ctx) {
   `,
     [player.id]
   );
-  
-  // Conta slots ocupados (equipados NÃO contam)
-  const slotsUsed = res.rows.filter(i => !i.equipped).length;
+
+  const rarityEmoji = { common: "🟢", uncommon: "🔵", rare: "🟣", epic: "🟡", legendary: "🟠" };
+  const slotsUsed = res.rows.filter((i) => !i.equipped).length;
   const slotsMax = player.inventory_slots_max || 20;
 
   if (res.rows.length === 0) {
@@ -1320,15 +1334,21 @@ async function renderInventory(ctx) {
     return;
   }
 
-  const rarityEmoji = {
-    common: "⚪",
-    uncommon: "🟢",
-    rare: "🔵",
-    epic: "🟣",
-    legendary: "🟡"
+  const classify = (item) => {
+    if (item.slot === "weapon") return "armas";
+    if (["armor", "shield", "boots"].includes(item.slot)) return "armaduras";
+    if (["ring", "amulet", "necklace"].includes(item.slot)) return "joias";
+    if (["consumable", "key"].includes(item.slot)) return "consumiveis";
+    return "outros";
   };
 
-  const lines = res.rows.map((i) => {
+  const itemsByFilter = res.rows.filter((i) => classify(i) === filter);
+  const perPage = 8;
+  const totalPages = Math.max(1, Math.ceil(itemsByFilter.length / perPage));
+  const pageNum = Math.min(totalPages, Math.max(1, Number(page) || 1));
+  const slice = itemsByFilter.slice((pageNum - 1) * perPage, pageNum * perPage);
+
+  const formatItemLine = (i) => {
     const rolled = [];
     if (i.rolled_atk) rolled.push(`ATK+${i.rolled_atk}`);
     if (i.rolled_def) rolled.push(`DEF+${i.rolled_def}`);
@@ -1341,27 +1361,77 @@ async function renderInventory(ctx) {
     const emoji = rarityEmoji[i.rarity] || "⚪";
     const equipTag = i.equipped ? " ⭐" : "";
     return `${emoji} ${i.name}${qtyText}${statsText}${consumableText}${equipTag}`;
-  });
+  };
 
-  const equipables = res.rows.filter((i) => i.slot !== "consumable");
-  const consumables = res.rows.filter((i) => i.slot === "consumable" && CONSUMABLE_EFFECTS[i.item_key]);
+  const equippedBySlot = (slot) => res.rows.find((r) => r.slot === slot && r.equipped);
+  const equippedLine = (slot, label) => {
+    const found = equippedBySlot(slot);
+    if (!found) return `${label}: —`;
+    const emoji = rarityEmoji[found.rarity] || "⚪";
+    const rolled = [];
+    if (found.rolled_atk) rolled.push(`ATK+${found.rolled_atk}`);
+    if (found.rolled_def) rolled.push(`DEF+${found.rolled_def}`);
+    if (found.rolled_hp) rolled.push(`HP+${found.rolled_hp}`);
+    if (found.rolled_crit) rolled.push(`CRIT+${found.rolled_crit}`);
+    const statsText = rolled.length ? ` (${rolled.join(", ")})` : "";
+    return `${label}: ${emoji} ${found.name}${statsText} ⭐`;
+  };
 
-  const kb = [];
-  if (equipables.length) {
-    for (const i of equipables) {
-      kb.push([Markup.button.callback(`${i.equipped ? "Desequipar" : "Equipar"} ${i.name}`, `equip_${i.id}`)]);
+  const lines = [];
+  lines.push(`⚔️ ATK ${stats.total_atk}  🛡️ DEF ${stats.total_def}`);
+  lines.push(`❤️ HP ${stats.total_hp}  🎯 CRIT ${stats.total_crit}%`);
+  lines.push(equippedLine("weapon", "Arma"));
+  lines.push(equippedLine("shield", "Escudo"));
+  lines.push(equippedLine("armor", "Armadura"));
+  lines.push(equippedLine("boots", "Bota"));
+  lines.push(equippedLine("amulet", "Colar"));
+  lines.push(equippedLine("ring", "Anel"));
+  lines.push("");
+
+  if (filter === "almas") {
+    lines.push("✨ Almas: nenhuma ainda. Em breve.");
+  } else if (slice.length === 0) {
+    lines.push("Nenhum item nessa categoria.");
+  } else {
+    lines.push(`📦 ${FILTER_LABELS[filter] || filter} — página ${pageNum}/${totalPages}`);
+    slice.forEach((i) => lines.push(formatItemLine(i)));
+  }
+  lines.push("");
+  lines.push(`💡 Itens equipados (⭐) não ocupam slots.`);
+
+  const keyboard = [
+    [
+      Markup.button.callback("⚔️ Armas", `inv:armas:1`),
+      Markup.button.callback("🛡️ Armaduras", `inv:armaduras:1`),
+    ],
+    [
+      Markup.button.callback("💎 Joias", `inv:joias:1`),
+      Markup.button.callback("🧪 Consumíveis", `inv:consumiveis:1`),
+    ],
+    [Markup.button.callback("✨ Almas", `inv:almas:1`)],
+  ];
+
+  const actionButtons = [];
+  for (const i of slice) {
+    if (["consumable"].includes(i.slot) && CONSUMABLE_EFFECTS[i.item_key]) {
+      actionButtons.push([Markup.button.callback(`Usar ${i.name} (${i.qty})`, `usec_${i.item_key}`)]);
+    } else if (["weapon", "armor", "shield", "boots", "ring", "amulet", "necklace"].includes(i.slot)) {
+      actionButtons.push([Markup.button.callback(`${i.equipped ? "Desequipar" : "Equipar"} ${i.name}`, `equip_${i.id}`)]);
     }
   }
-  if (consumables.length) {
-    for (const i of consumables) {
-      kb.push([Markup.button.callback(`Usar ${i.name} (${i.qty})`, `usec_${i.item_key}`)]);
-    }
-  }
-  kb.push([Markup.button.callback("🏠 Menu", "menu")]);
 
-  await sendCard(ctx, { 
-    caption: `🎒 *Inventário (${slotsUsed}/${slotsMax})*\n\n${lines.join("\n")}\n\n💡 Itens equipados (⭐) não ocupam slots.`, 
-    keyboard: kb 
+  if (totalPages > 1) {
+    const nav = [];
+    if (pageNum > 1) nav.push(Markup.button.callback("⬅️", `inv:${filter}:${pageNum - 1}`));
+    if (pageNum < totalPages) nav.push(Markup.button.callback("➡️", `inv:${filter}:${pageNum + 1}`));
+    if (nav.length) keyboard.push(nav);
+  }
+
+  const kb = [...keyboard, ...actionButtons, [Markup.button.callback("🏠 Menu", "menu")]];
+
+  await sendCard(ctx, {
+    caption: `🎒 *Inventário (${slotsUsed}/${slotsMax})*\n\n${lines.join("\n")}`,
+    keyboard: kb,
   });
   if (ctx.callbackQuery) ctx.answerCbQuery();
 }
@@ -1887,6 +1957,7 @@ bot.action("rename", async (ctx) => {
 
 bot.command("inventario", renderInventory);
 bot.action("inventario", renderInventory);
+bot.action(/inv:([a-z_]+):(\d+)/, renderInventory);
 
 bot.command("classe", renderClass);
 bot.action("classe", renderClass);
