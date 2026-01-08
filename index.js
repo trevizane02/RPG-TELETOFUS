@@ -412,10 +412,11 @@ async function applyTempBuff(playerId, buff, minutes = 30) {
   );
   const row = current.rows[0] || {};
   const expiresAt = new Date(Date.now() + minutes * 60000);
+  const hasTonic = [buff.atk, buff.def, buff.crit].some((val) => val !== undefined && val !== null);
   const newVals = {
-    atk: buff.atk ?? row.temp_atk_buff ?? 0,
-    def: buff.def ?? row.temp_def_buff ?? 0,
-    crit: buff.crit ?? row.temp_crit_buff ?? 0,
+    atk: hasTonic ? buff.atk ?? 0 : row.temp_atk_buff ?? 0,
+    def: hasTonic ? buff.def ?? 0 : row.temp_def_buff ?? 0,
+    crit: hasTonic ? buff.crit ?? 0 : row.temp_crit_buff ?? 0,
     xp: buff.xp ?? row.temp_xp_buff ?? 0,
     drop: buff.drop ?? row.temp_drop_buff ?? 0,
   };
