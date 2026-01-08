@@ -13,7 +13,7 @@ const SURRENDER_COINS = 3;
 const ARENA_MAX_SLOTS = 5;
 const ARENA_FREE_SLOTS = 1;
 const CHEST_CHANCES = {
-  common: 0.25, // 25%
+  common: 0.7, // 70%
   uncommon: 0.08, // 8%
   legendary: 0.002, // 0.2%
 };
