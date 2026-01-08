@@ -185,12 +185,13 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
       turnStartTime: null,
       messageIds: new Map(),
       totalDrops: new Map(),
-      contribution: new Map(),
       mapImage: null,
       locked: false,
       bestDrop: null,
       consumablePrompts: new Map(),
       resolvingTurn: false,
+      contributionAtk: new Map(),
+      contributionDef: new Map(),
     };
     session.memberData.set(String(ctx.from.id), { name: base.player.name || "Aventureiro", ready: true, hp: base.player.hp, maxHp: stats.total_hp, alive: true, dmg: 0, contrib: 0 });
     sessions.set(code, session);
@@ -414,20 +415,27 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
     const xpTotal = Math.round(xpBase * (floor.scaling?.xpMult || 1));
     const partyMult = 1 + 0.4 * Math.max(0, aliveMembers.length - 1);
 
-    // Contribuição para dividir XP
-    const contribMap = session.contribution || new Map();
-    let contribSum = 0;
+    // Contribuição separada para ataque/defesa
+    const contribAtk = session.contributionAtk || new Map();
+    const contribDef = session.contributionDef || new Map();
+    let atkSum = 0;
+    let defSum = 0;
     for (const uid of aliveMembers) {
-      contribSum += contribMap.get(uid) || 0;
+      atkSum += contribAtk.get(uid) || 0;
+      defSum += contribDef.get(uid) || 0;
     }
+    const atkWeight = 0.55;
+    const defWeight = 0.45;
 
     for (const uid of aliveMembers) {
-    const member = session.memberData.get(uid);
-    const player = await getPlayer(uid);
-    const buff = getPlayerBuff(player);
-    const contrib = contribMap.get(uid) || 0;
-    const xpShare = contribSum > 0 ? Math.max(1, Math.floor((xpTotal * contrib) / contribSum)) : Math.max(1, Math.floor(xpTotal / Math.max(1, aliveMembers.length)));
-    const xpShareBuffed = Math.round(xpShare * (1 + (buff.xp || 0) / 100));
+      const member = session.memberData.get(uid);
+      const player = await getPlayer(uid);
+      const buff = getPlayerBuff(player);
+      const atkShare = atkSum > 0 ? (contribAtk.get(uid) || 0) / atkSum : 0;
+      const defShare = defSum > 0 ? (contribDef.get(uid) || 0) / defSum : 0;
+      const weight = atkSum + defSum > 0 ? atkWeight * atkShare + defWeight * defShare : 1 / Math.max(1, aliveMembers.length);
+      const xpShare = Math.max(1, Math.floor(xpTotal * weight));
+      const xpShareBuffed = Math.round(xpShare * (1 + (buff.xp || 0) / 100));
       let gold = randInt(1, floor.isBoss ? 300 : 100);
       gold = Math.round(gold * (floor.scaling?.goldMult || 1) * partyMult);
 
@@ -487,11 +495,24 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
       session.totalDrops.set(uid, [...(session.totalDrops.get(uid) || []), loot]);
     }
 
-    session.contribution = new Map();
-    await broadcastLoot(session, mob.name, drops);
+    session.contributionAtk = new Map();
+    session.contributionDef = new Map();
+    session.messageIds = new Map(); // força novo card na próxima sala para manter ordem das mensagens
+    await broadcastLoot(session, mob.name, drops, contribAtk, contribDef);
   }
 
-  async function broadcastLoot(session, mobName, drops) {
+  async function broadcastLoot(session, mobName, drops, contribAtk = new Map(), contribDef = new Map()) {
+    const topAtk = [...contribAtk.entries()]
+      .map(([uid, val]) => ({ uid, val }))
+      .filter((entry) => entry.val > 0)
+      .sort((a, b) => b.val - a.val)
+      .slice(0, 1);
+    const topDef = [...contribDef.entries()]
+      .map(([uid, val]) => ({ uid, val }))
+      .filter((entry) => entry.val > 0)
+      .sort((a, b) => b.val - a.val)
+      .slice(0, 1);
+
     let msg = `💀 <b>${mobName}</b> derrotado!\n\n🎁 <b>Recompensas:</b>\n\n`;
     for (const [uid, loot] of drops) {
       const member = session.memberData.get(uid);
@@ -512,6 +533,20 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
           const icon = rarityIcon[item.rarity] || "⚪";
           msg += `   ${icon} ${item.name}\n`;
         }
+      }
+      msg += "\n";
+    }
+    if (topAtk.length || topDef.length) {
+      msg += "🏅 Destaques:\n";
+      if (topAtk.length) {
+        const entry = topAtk[0];
+        const name = session.memberData.get(entry.uid)?.name || entry.uid;
+        msg += `⚔️ Top ATK: ${name} (${entry.val} dano)\n`;
+      }
+      if (topDef.length) {
+        const entry = topDef[0];
+        const name = session.memberData.get(entry.uid)?.name || entry.uid;
+        msg += `🛡️ Top DEF: ${name} (${entry.val} defesa)\n`;
       }
       msg += "\n";
     }
@@ -593,13 +628,13 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
         md.dmg = (md.dmg || 0) + dmg;
         md.contrib = (md.contrib || 0) + dmg;
         session.memberData.set(uid, md);
-        session.contribution.set(uid, (session.contribution.get(uid) || 0) + dmg);
+        session.contributionAtk.set(uid, (session.contributionAtk.get(uid) || 0) + dmg);
         turnEvents.push(`⚔️ ${md.name} causa ${dmg} em ${mob.name}`);
       } else if (action.action === "defend") {
         defenders.push({ uid, defBonus: action.defBonus || 0 });
         const md = session.memberData.get(uid);
         // crédito de defesa conta para XP, mesmo se o mob não bater nele
-        session.contribution.set(uid, (session.contribution.get(uid) || 0) + (action.defBonus || 0));
+        session.contributionDef.set(uid, (session.contributionDef.get(uid) || 0) + (action.defBonus || 0));
         turnEvents.push(`🛡️ ${md.name} defende (+${action.defBonus || 0} DEF)`);
       } else if (action.action === "cons" && action.itemKey) {
         await useConsumable(player, action.itemKey);
@@ -625,7 +660,7 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
       md.hp = newHp;
       if (newHp <= 0) md.alive = false;
       session.memberData.set(targetId, md);
-      if (mitigated > 0) session.contribution.set(targetId, (session.contribution.get(targetId) || 0) + mitigated);
+      if (mitigated > 0) session.contributionDef.set(targetId, (session.contributionDef.get(targetId) || 0) + mitigated);
       turnEvents.push(`💥 ${mob.name} causa ${dmg} em ${md.name}`);
     }
 
@@ -668,7 +703,8 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
     session.currentFloor = 0;
     session.playerActions = new Map();
     session.totalDrops = new Map();
-    session.contribution = new Map();
+    session.contributionAtk = new Map();
+    session.contributionDef = new Map();
     session.turnTimer = null;
     await generateDungeonFloors(session);
     await ctx.answerCbQuery().catch(() => {});
