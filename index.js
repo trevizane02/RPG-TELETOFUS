@@ -76,7 +76,7 @@ const RARITY_ROLL = {
   uncommon: [0.55, 0.85],
   rare: [0.75, 1.0],
   epic: [0.9, 1.05],
-  legendary: [1.0, 1.15],
+  legendary: [0.7, 1.0],
 };
 
 const CONSUMABLE_EFFECTS = {
@@ -440,7 +440,7 @@ function rollStat(min, max, rarity = "common") {
   const [rMin, rMax] = RARITY_ROLL[rarity] || RARITY_ROLL.common;
   const roll = Math.random() * (rMax - rMin) + rMin;
   const val = Math.round(rangeMin + (rangeMax - rangeMin) * roll);
-  return Math.max(rangeMin, Math.min(val, Math.round(rangeMax * 1.2)));
+  return Math.max(rangeMin, Math.min(val, rangeMax));
 }
 
 function rollItemStats(item) {
@@ -805,7 +805,8 @@ async function maybeDropItem(mapKey, difficulty = 1, isBoss = false, opts = {}) 
     const rarePool = items.filter((i) =>
       ["rare", "epic", "legendary", "uncommon"].includes(i.rarity || "common") &&
       !SHOP_ONLY_KEYS.has(i.key) &&
-      Number(i.drop_rate || 0) > 0
+      Number(i.drop_rate || 0) > 0 &&
+      (!dungeon || !i.boss_dungeon_only)
     );
     if (rarePool.length) return rarePool[Math.floor(Math.random() * rarePool.length)];
   }
