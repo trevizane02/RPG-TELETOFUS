@@ -873,6 +873,7 @@ export async function migrate() {
         { item_key: 'elixir_xp', currency: 'tofus', buy_price: 5, sell_price: null },
         { item_key: 'elixir_drop', currency: 'tofus', buy_price: 5, sell_price: null },
         { item_key: 'energy_potion_pack', currency: 'tofus', buy_price: 10, sell_price: null },
+        { item_key: 'dungeon_key', currency: 'tofus', buy_price: 3, sell_price: null },
       ];
       
       console.log("Seeding loja...");

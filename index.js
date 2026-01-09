@@ -67,7 +67,7 @@ const SHOP_DEFS = {
   },
   castelo: {
     name: "Loja do Castelo",
-    items: ["elixir_xp", "elixir_drop", "energy_potion_pack"],
+    items: ["elixir_xp", "elixir_drop", "energy_potion_pack", "dungeon_key"],
   },
 };
 
