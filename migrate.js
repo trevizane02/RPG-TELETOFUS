@@ -899,6 +899,10 @@ export async function migrate() {
       await client.query(`UPDATE items SET boss_only = true WHERE key = 'dungeon_key'`);
       await client.query(`UPDATE items SET boss_dungeon_only = true WHERE key IN ('brass_ring','sapphire_amulet','leather_boots','silver_ring','platinum_amulet','iron_boots')`);
       await client.query(`UPDATE items SET drop_rate = 0 WHERE key IN ('elixir_xp','elixir_drop','energy_potion_pack')`);
+      await client.query(`UPDATE items SET class_req = 'guerreiro' WHERE key IN ('grave_war_sword','grave_war_plate','grave_war_shield','grave_war_lichblade','hydra_war_amulet','hydra_war_ring')`);
+      await client.query(`UPDATE items SET class_req = 'arqueiro' WHERE key IN ('grave_arc_bow','grave_arc_leather','grave_arc_buckler','grave_arc_ossuary_bow','hydra_arc_amulet','hydra_arc_ring')`);
+      await client.query(`UPDATE items SET class_req = 'mago' WHERE key IN ('grave_mag_wand','grave_mag_robe','grave_mag_talisman','grave_mag_lichstaff','hydra_mag_amulet','hydra_mag_ring')`);
+      await client.query(`DELETE FROM shop_items WHERE item_key = 'dungeon_key' AND currency = 'gold'`);
 
 
       // CLEANUP LEGACY DATA (mapas/mobs/itens fora dos seeds)

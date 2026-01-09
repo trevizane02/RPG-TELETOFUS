@@ -337,9 +337,11 @@ async function getPlayerStats(player) {
       COALESCE(SUM(COALESCE(NULLIF(inv.rolled_crit,0), i.crit_max, i.crit_min, 0)), 0) as crit_bonus
     FROM inventory inv
     JOIN items i ON inv.item_key = i.key
-    WHERE inv.player_id = $1 AND inv.equipped = true
+    WHERE inv.player_id = $1
+      AND inv.equipped = true
+      AND (i.class_req IS NULL OR i.class_req = $2)
     `,
-    [player.id]
+    [player.id, player.class]
   );
 
   const bonus = res.rows[0] || { atk_bonus: 0, def_bonus: 0, hp_bonus: 0, crit_bonus: 0 };
@@ -755,6 +757,14 @@ async function sendCard(ctx, { fileId, caption, keyboard, parse_mode = "Markdown
   return ctx.reply(caption, opts);
 }
 
+function inferClassReq(itemKey = "") {
+  if (!itemKey) return null;
+  if (itemKey.startsWith("grave_war_") || itemKey.startsWith("hydra_war_")) return "guerreiro";
+  if (itemKey.startsWith("grave_arc_") || itemKey.startsWith("hydra_arc_")) return "arqueiro";
+  if (itemKey.startsWith("grave_mag_") || itemKey.startsWith("hydra_mag_")) return "mago";
+  return null;
+}
+
 async function maybeDropItem(mapKey, difficulty = 1, isBoss = false, opts = {}) {
   const { dungeon = false, playerClass = null, playerLevel = null, dropBonusPct = 0 } = opts;
   const SHOP_ONLY_KEYS = new Set(["elixir_xp", "elixir_drop", "energy_potion_pack"]);
@@ -764,11 +774,12 @@ async function maybeDropItem(mapKey, difficulty = 1, isBoss = false, opts = {}) 
 
   const drops = [];
   for (const item of items) {
+    const effectiveClassReq = item.class_req || inferClassReq(item.key);
     if (SHOP_ONLY_KEYS.has(item.key)) continue;
     if (item.boss_dungeon_only && !(dungeon && isBoss)) continue;
     if (item.boss_only && !isBoss) continue;
-    if (item.class_req && playerClass && item.class_req !== playerClass) continue;
-    if (item.class_req && !playerClass) continue;
+    if (effectiveClassReq && playerClass && effectiveClassReq !== playerClass) continue;
+    if (effectiveClassReq && !playerClass) continue;
     if (item.level_req && playerLevel != null && playerLevel < item.level_req) continue;
     if (!(Number(item.drop_rate || 0) > 0)) continue;
     let base = Number(item.drop_rate || 0.01);
@@ -777,7 +788,7 @@ async function maybeDropItem(mapKey, difficulty = 1, isBoss = false, opts = {}) 
     }
     const difficultyBonus = 1 + Math.max(0, difficulty - 1) * 0.35;
     const bossFactor = isBoss
-      ? item.class_req
+      ? effectiveClassReq
         ? 1.75
         : ["rare", "epic", "legendary"].includes(item.rarity || "common")
         ? 4
@@ -2317,7 +2328,14 @@ bot.action(/equip_(.+)/, async (ctx) => {
   const item = res.rows[0];
   const lvlInfo = await getLevelFromTotalXp(player.xp_total);
 
-  if (item.class_req && item.class_req !== player.class) {
+  if (item.equipped) {
+    await pool.query("UPDATE inventory SET equipped = false WHERE id = $1", [id]);
+    await ctx.answerCbQuery("Item desequipado");
+    return renderInventory(ctx);
+  }
+
+  const effectiveClassReq = item.class_req || inferClassReq(item.item_key);
+  if (effectiveClassReq && effectiveClassReq !== player.class) {
     await ctx.answerCbQuery("Sua classe não pode usar esse item.");
     return;
   }
@@ -2336,17 +2354,12 @@ bot.action(/equip_(.+)/, async (ctx) => {
     await ctx.answerCbQuery("Use /usar <item> para consumíveis");
     return;
   }
-  if (item.equipped) {
-    await pool.query("UPDATE inventory SET equipped = false WHERE id = $1", [id]);
-    await ctx.answerCbQuery("Item desequipado");
-  } else {
-    await pool.query(
-      "UPDATE inventory inv SET equipped = false FROM items i WHERE inv.player_id = $1 AND inv.item_key = i.key AND i.slot = $2",
-      [player.id, item.slot]
-    );
-    await pool.query("UPDATE inventory SET equipped = true WHERE id = $1", [id]);
-    await ctx.answerCbQuery("Item equipado");
-  }
+  await pool.query(
+    "UPDATE inventory inv SET equipped = false FROM items i WHERE inv.player_id = $1 AND inv.item_key = i.key AND i.slot = $2",
+    [player.id, item.slot]
+  );
+  await pool.query("UPDATE inventory SET equipped = true WHERE id = $1", [id]);
+  await ctx.answerCbQuery("Item equipado");
 
   return renderInventory(ctx);
 });
@@ -2510,7 +2523,7 @@ bot.action("shop_selllist", async (ctx) => {
       s.buy_price
     FROM inventory inv
     JOIN items i ON i.key = inv.item_key
-    LEFT JOIN shop_items s ON s.item_key = inv.item_key
+    LEFT JOIN shop_items s ON s.item_key = inv.item_key AND s.currency = 'gold'
     WHERE inv.player_id = $1
       AND inv.equipped = FALSE
     ORDER BY i.rarity DESC, i.name
@@ -2551,7 +2564,7 @@ bot.action(/^shop_sell_item:([A-Za-z0-9_-]+)$/, async (ctx) => {
     SELECT inv.id, inv.qty, i.name, i.rarity, s.sell_price AS shop_sell_price, s.currency, s.buy_price
     FROM inventory inv
     JOIN items i ON i.key = inv.item_key
-    LEFT JOIN shop_items s ON s.item_key = inv.item_key
+    LEFT JOIN shop_items s ON s.item_key = inv.item_key AND s.currency = 'gold'
     WHERE inv.id = $1 AND inv.player_id = $2 AND inv.equipped = FALSE
     `,
     [invId, player.id]
@@ -2590,7 +2603,7 @@ bot.action(/^shop_sell_do:([A-Za-z0-9_-]+):(\d+)$/, async (ctx) => {
     SELECT inv.id, inv.qty, i.name, i.rarity, s.sell_price AS shop_sell_price, s.currency, s.buy_price
     FROM inventory inv
     JOIN items i ON i.key = inv.item_key
-    LEFT JOIN shop_items s ON s.item_key = inv.item_key
+    LEFT JOIN shop_items s ON s.item_key = inv.item_key AND s.currency = 'gold'
     WHERE inv.id = $1 AND inv.player_id = $2 AND inv.equipped = FALSE
     `,
     [invId, player.id]

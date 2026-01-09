@@ -83,6 +83,6 @@ export async function createPixPayment({ telegramId, pack }) {
   return {
     payment_id: res?.id,
     qr_code: qr?.qr_code,
-    qr_base64: qr?.qr_code_base64,
+    qr_code_base64: qr?.qr_code_base64,
   };
 }

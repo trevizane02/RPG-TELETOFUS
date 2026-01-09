@@ -175,23 +175,18 @@ export function registerVip({ bot, app, deps }) {
     try {
       const pix = await createPixPayment({ telegramId: String(ctx.from.id), pack });
       if (!pix?.qr_code) throw new Error("PIX indisponível");
-      const qrBuffer = pix.qr_code_base64 ? Buffer.from(pix.qr_code_base64, "base64") : null;
+      const qrCode = (pix.qr_code || "").trim();
       const caption =
         `✅ PIX gerado para o pacote ${packInfo.qty} Tofus (R$ ${packInfo.price}).\n` +
-        `Use o código copia e cola abaixo ou o QR para pagar.\n` +
+        `Use o código copia e cola abaixo para pagar.\n` +
         `Após o pagamento aprovado, os Tofus serão creditados automaticamente.`;
       const keyboard = [
         [Markup.button.callback("📋 Copiar código PIX", `vip_pix_copy:${pack}`)],
         [Markup.button.callback("⬅️ Voltar", "vip_tofus"), Markup.button.callback("🏠 Menu", "menu")],
       ];
-      if (qrBuffer) {
-        await ctx.replyWithPhoto({ source: qrBuffer }, { caption, reply_markup: Markup.inlineKeyboard(keyboard).reply_markup });
-        await ctx.reply(pix.qr_code || "Código PIX não disponível", { reply_markup: Markup.inlineKeyboard(keyboard).reply_markup });
-      } else {
-        await sendCard(ctx, { caption: `${caption}\n\n${pix.qr_code || "Código PIX não disponível"}`, keyboard });
-      }
+      await sendCard(ctx, { caption: `${caption}\n\n${qrCode || "Código PIX não disponível"}`, keyboard });
       // Armazena o código para copiar
-      pixCodes.set(String(ctx.from.id), pix.qr_code);
+      pixCodes.set(String(ctx.from.id), qrCode);
     } catch (e) {
       console.error("createTofuPreference", e);
       await sendCard(ctx, {
@@ -417,7 +412,7 @@ export function registerVip({ bot, app, deps }) {
       if (ctx.callbackQuery) ctx.answerCbQuery("Código indisponível").catch(() => {});
       return;
     }
-    await ctx.replyWithMarkdownV2(`\` ${code.replace(/[`]/g, "")} \``);
+    await ctx.reply(code);
     if (ctx.callbackQuery) ctx.answerCbQuery("Código enviado").catch(() => {});
   });
 }

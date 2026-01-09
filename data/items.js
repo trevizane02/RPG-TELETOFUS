@@ -15,6 +15,10 @@ export const ITEM_SEEDS = [
   { key: "grave_war_sword", name: "Espada Tumular", slot: "weapon", rarity: "rare", atk_min: 5, atk_max: 9, crit_min: 0, crit_max: 2, drop_rate: 0.0024, map_key: "grave", class_req: "guerreiro", level_req: 23 },
   { key: "grave_arc_bow", name: "Arco dos Ossos", slot: "weapon", rarity: "rare", atk_min: 5, atk_max: 8, crit_min: 4, crit_max: 7, drop_rate: 0.0024, map_key: "grave", class_req: "arqueiro", level_req: 22 },
   { key: "grave_mag_wand", name: "Varinha Fúnebre", slot: "weapon", rarity: "rare", atk_min: 5, atk_max: 9, crit_min: 3, crit_max: 6, drop_rate: 0.0024, map_key: "grave", class_req: "mago", level_req: 24 },
+  // Grave legendary boss weapons
+  { key: "grave_war_lichblade", name: "Lâmina do Lich", slot: "weapon", rarity: "legendary", atk_min: 6, atk_max: 10, crit_min: 1, crit_max: 3, drop_rate: 0.0003, map_key: "grave", boss_only: true, class_req: "guerreiro", level_req: 28 },
+  { key: "grave_arc_ossuary_bow", name: "Arco do Ossuário", slot: "weapon", rarity: "legendary", atk_min: 6, atk_max: 9, crit_min: 5, crit_max: 8, drop_rate: 0.0003, map_key: "grave", boss_only: true, class_req: "arqueiro", level_req: 28 },
+  { key: "grave_mag_lichstaff", name: "Cajado do Lich", slot: "weapon", rarity: "legendary", atk_min: 6, atk_max: 10, crit_min: 4, crit_max: 7, drop_rate: 0.0003, map_key: "grave", boss_only: true, class_req: "mago", level_req: 28 },
 
   // Armors
   { key: "leather_armor", name: "Armadura de Couro", slot: "armor", rarity: "common", def_min: 1, def_max: 3, hp_min: 0, hp_max: 5, drop_rate: 0.03, map_key: "plains" },
@@ -45,13 +49,13 @@ export const ITEM_SEEDS = [
   { key: "iron_boots", name: "Bota de Ferro", slot: "boots", rarity: "uncommon", def_min: 5, def_max: 8, hp_min: 1, hp_max: 4, drop_rate: 0.01, map_key: "forest", boss_dungeon_only: true },
 
   // Acessórios (Swamp) - boss do pântano (Hidra)
-  { key: "hydra_war_amulet", name: "Colar Pegajoso da Hidra", slot: "amulet", rarity: "legendary", def_min: 3, def_max: 6, hp_min: 8, hp_max: 14, drop_rate: 0.01, map_key: "swamp", boss_dungeon_only: true, class_req: "guerreiro", level_req: 20 },
-  { key: "hydra_arc_amulet", name: "Colar de Dentes da Hidra", slot: "amulet", rarity: "legendary", atk_min: 2, atk_max: 4, crit_min: 5, crit_max: 9, hp_min: 3, hp_max: 7, drop_rate: 0.01, map_key: "swamp", boss_dungeon_only: true, class_req: "arqueiro", level_req: 20 },
-  { key: "hydra_mag_amulet", name: "Colar da Cabeça da Hidra", slot: "amulet", rarity: "legendary", atk_min: 5, atk_max: 9, crit_min: 2, crit_max: 4, hp_min: 4, hp_max: 8, drop_rate: 0.01, map_key: "swamp", boss_dungeon_only: true, class_req: "mago", level_req: 20 },
-  { key: "hydra_war_ring", name: "Anel de Escamas da Hidra", slot: "ring", rarity: "legendary", def_min: 2, def_max: 4, hp_min: 6, hp_max: 10, drop_rate: 0.01, map_key: "swamp", boss_dungeon_only: true, class_req: "guerreiro", level_req: 20 },
-  { key: "hydra_arc_ring", name: "Anel da Hidra Caçadora", slot: "ring", rarity: "legendary", atk_min: 2, atk_max: 4, crit_min: 6, crit_max: 10, drop_rate: 0.01, map_key: "swamp", boss_dungeon_only: true, class_req: "arqueiro", level_req: 20 },
-  { key: "hydra_mag_ring", name: "Anel do Olho da Hidra", slot: "ring", rarity: "legendary", atk_min: 4, atk_max: 7, crit_min: 2, crit_max: 5, drop_rate: 0.01, map_key: "swamp", boss_dungeon_only: true, class_req: "mago", level_req: 20 },
-  { key: "boots_of_haste", name: "Boots of Haste", slot: "boots", rarity: "legendary", def_min: 7, def_max: 11, hp_min: 4, hp_max: 8, drop_rate: 0.002, map_key: "swamp", boss_dungeon_only: true },
+  { key: "hydra_war_amulet", name: "Colar Pegajoso da Hidra", slot: "amulet", rarity: "legendary", def_min: 3, def_max: 6, hp_min: 8, hp_max: 14, drop_rate: 0.01, map_key: "swamp", boss_dungeon_only: true, class_req: "guerreiro", level_req: 22 },
+  { key: "hydra_arc_amulet", name: "Colar de Dentes da Hidra", slot: "amulet", rarity: "legendary", atk_min: 2, atk_max: 4, crit_min: 5, crit_max: 9, hp_min: 3, hp_max: 7, drop_rate: 0.01, map_key: "swamp", boss_dungeon_only: true, class_req: "arqueiro", level_req: 22 },
+  { key: "hydra_mag_amulet", name: "Colar da Cabeça da Hidra", slot: "amulet", rarity: "legendary", atk_min: 5, atk_max: 9, crit_min: 2, crit_max: 4, hp_min: 4, hp_max: 8, drop_rate: 0.01, map_key: "swamp", boss_dungeon_only: true, class_req: "mago", level_req: 22 },
+  { key: "hydra_war_ring", name: "Anel de Escamas da Hidra", slot: "ring", rarity: "legendary", def_min: 2, def_max: 4, hp_min: 6, hp_max: 10, drop_rate: 0.01, map_key: "swamp", boss_dungeon_only: true, class_req: "guerreiro", level_req: 22 },
+  { key: "hydra_arc_ring", name: "Anel da Hidra Caçadora", slot: "ring", rarity: "legendary", atk_min: 2, atk_max: 4, crit_min: 6, crit_max: 10, drop_rate: 0.01, map_key: "swamp", boss_dungeon_only: true, class_req: "arqueiro", level_req: 22 },
+  { key: "hydra_mag_ring", name: "Anel do Olho da Hidra", slot: "ring", rarity: "legendary", atk_min: 4, atk_max: 7, crit_min: 2, crit_max: 5, drop_rate: 0.01, map_key: "swamp", boss_dungeon_only: true, class_req: "mago", level_req: 22 },
+  { key: "boots_of_haste", name: "Boots of Haste", slot: "boots", rarity: "legendary", def_min: 7, def_max: 11, hp_min: 4, hp_max: 8, drop_rate: 0.002, map_key: "swamp", boss_dungeon_only: true, level_req: 22 },
 
   // Accessories
   { key: "amulet_health", name: "Amuleto Vital", slot: "amulet", rarity: "rare", hp_min: 15, hp_max: 30, drop_rate: 0.008, map_key: "desert" },
