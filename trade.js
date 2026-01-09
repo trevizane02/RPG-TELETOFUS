@@ -84,7 +84,7 @@ export function registerTrade(bot, deps) {
              i.name, i.rarity, i.slot
       FROM inventory inv
       JOIN items i ON i.key = inv.item_key
-      WHERE inv.player_id = $1 AND inv.qty > 0 AND inv.equipped = FALSE AND i.slot <> 'consumable'
+      WHERE inv.player_id = $1 AND inv.qty > 0 AND inv.equipped = FALSE AND i.slot NOT IN ('consumable', 'key')
       ORDER BY i.slot ASC, i.rarity DESC, i.name ASC, inv.id ASC
     `,
       [player.id]
@@ -94,7 +94,7 @@ export function registerTrade(bot, deps) {
       SELECT inv.item_key, SUM(inv.qty)::int AS qty, i.name, i.rarity, i.slot
       FROM inventory inv
       JOIN items i ON i.key = inv.item_key
-      WHERE inv.player_id = $1 AND inv.qty > 0 AND inv.equipped = FALSE AND i.slot = 'consumable'
+      WHERE inv.player_id = $1 AND inv.qty > 0 AND inv.equipped = FALSE AND i.slot IN ('consumable', 'key')
       GROUP BY inv.item_key, i.name, i.rarity, i.slot
       ORDER BY i.rarity DESC, i.name ASC
     `,
@@ -685,10 +685,10 @@ export function registerTrade(bot, deps) {
               [guest.id, item.item_key, item.slot, item.rolled_atk, item.rolled_def, item.rolled_hp, item.rolled_crit, item.rolled_rarity]
             );
           }
-        } else if (itemRow?.slot === "consumable") {
+        } else if (["consumable", "key"].includes(itemRow?.slot)) {
           const srcRow = await pool.query(
-            "SELECT id, qty FROM inventory WHERE player_id = $1 AND item_key = $2 AND slot = 'consumable' AND equipped = FALSE LIMIT 1",
-            [owner.id, ownerOffer.item_key]
+            "SELECT id, qty FROM inventory WHERE player_id = $1 AND item_key = $2 AND slot = $3 AND equipped = FALSE LIMIT 1",
+            [owner.id, ownerOffer.item_key, itemRow.slot]
           );
           const stack = srcRow.rows[0];
           if (!stack || stack.qty < ownerOffer.qty) throw new Error("Stock mismatch");
@@ -699,15 +699,15 @@ export function registerTrade(bot, deps) {
             await pool.query("DELETE FROM inventory WHERE id = $1", [stack.id]);
           }
           const destStack = await pool.query(
-            "SELECT id FROM inventory WHERE player_id = $1 AND item_key = $2 AND slot = 'consumable' AND equipped = FALSE ORDER BY qty DESC LIMIT 1",
-            [guest.id, ownerOffer.item_key]
+            "SELECT id FROM inventory WHERE player_id = $1 AND item_key = $2 AND slot = $3 AND equipped = FALSE ORDER BY qty DESC LIMIT 1",
+            [guest.id, ownerOffer.item_key, itemRow.slot]
           );
           if (destStack.rows.length) {
             await pool.query("UPDATE inventory SET qty = qty + $1 WHERE id = $2", [ownerOffer.qty, destStack.rows[0].id]);
           } else {
             await pool.query(
-              "INSERT INTO inventory (player_id, item_key, slot, qty, rolled_rarity, equipped) VALUES ($1, $2, 'consumable', $3, $4, FALSE)",
-              [guest.id, ownerOffer.item_key, ownerOffer.qty, itemRow.rarity || null]
+              "INSERT INTO inventory (player_id, item_key, slot, qty, rolled_rarity, equipped) VALUES ($1, $2, $3, $4, $5, FALSE)",
+              [guest.id, ownerOffer.item_key, itemRow.slot, ownerOffer.qty, itemRow.rarity || null]
             );
           }
         } else {
@@ -755,10 +755,10 @@ export function registerTrade(bot, deps) {
               [owner.id, item.item_key, item.slot, item.rolled_atk, item.rolled_def, item.rolled_hp, item.rolled_crit, item.rolled_rarity]
             );
           }
-        } else if (itemRow?.slot === "consumable") {
+        } else if (["consumable", "key"].includes(itemRow?.slot)) {
           const srcRow = await pool.query(
-            "SELECT id, qty FROM inventory WHERE player_id = $1 AND item_key = $2 AND slot = 'consumable' AND equipped = FALSE LIMIT 1",
-            [guest.id, guestOffer.item_key]
+            "SELECT id, qty FROM inventory WHERE player_id = $1 AND item_key = $2 AND slot = $3 AND equipped = FALSE LIMIT 1",
+            [guest.id, guestOffer.item_key, itemRow.slot]
           );
           const stack = srcRow.rows[0];
           if (!stack || stack.qty < guestOffer.qty) throw new Error("Stock mismatch");
@@ -769,15 +769,15 @@ export function registerTrade(bot, deps) {
             await pool.query("DELETE FROM inventory WHERE id = $1", [stack.id]);
           }
           const destStack = await pool.query(
-            "SELECT id FROM inventory WHERE player_id = $1 AND item_key = $2 AND slot = 'consumable' AND equipped = FALSE ORDER BY qty DESC LIMIT 1",
-            [owner.id, guestOffer.item_key]
+            "SELECT id FROM inventory WHERE player_id = $1 AND item_key = $2 AND slot = $3 AND equipped = FALSE ORDER BY qty DESC LIMIT 1",
+            [owner.id, guestOffer.item_key, itemRow.slot]
           );
           if (destStack.rows.length) {
             await pool.query("UPDATE inventory SET qty = qty + $1 WHERE id = $2", [guestOffer.qty, destStack.rows[0].id]);
           } else {
             await pool.query(
-              "INSERT INTO inventory (player_id, item_key, slot, qty, rolled_rarity, equipped) VALUES ($1, $2, 'consumable', $3, $4, FALSE)",
-              [owner.id, guestOffer.item_key, guestOffer.qty, itemRow.rarity || null]
+              "INSERT INTO inventory (player_id, item_key, slot, qty, rolled_rarity, equipped) VALUES ($1, $2, $3, $4, $5, FALSE)",
+              [owner.id, guestOffer.item_key, itemRow.slot, guestOffer.qty, itemRow.rarity || null]
             );
           }
         } else {
