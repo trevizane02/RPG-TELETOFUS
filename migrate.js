@@ -58,6 +58,11 @@ const MOB_SEEDS = [
   { key: "necro_apprentice", name: "Necromante Aprendiz", map_key: "grave", rarity: "uncommon", level_min: 26, hp: 230, atk: 36, def: 9, xp_gain: 150, gold_gain: 120 },
   { key: "wraith", name: "Espectro", map_key: "grave", rarity: "rare", level_min: 28, hp: 260, atk: 40, def: 12, xp_gain: 180, gold_gain: 150 },
   { key: "lich", name: "Lich", map_key: "grave", rarity: "boss", level_min: 31, hp: 350, atk: 50, def: 15, xp_gain: 260, gold_gain: 220 },
+  // Dungeon Grave (Especial)
+  { key: "d_grave_shadow_knight", name: "Cavaleiro Sombrio", map_key: "grave", rarity: "uncommon", level_min: 24, hp: 320, atk: 42, def: 12, xp_gain: 170, gold_gain: 130 },
+  { key: "d_grave_abyss_cultist", name: "Cultista Abissal", map_key: "grave", rarity: "rare", level_min: 25, hp: 340, atk: 44, def: 13, xp_gain: 190, gold_gain: 150 },
+  { key: "d_grave_bone_golem", name: "Golem de Osso", map_key: "grave", rarity: "rare", level_min: 26, hp: 360, atk: 46, def: 15, xp_gain: 210, gold_gain: 170 },
+  { key: "d_grave_archlich", name: "Arquilorde dos Ossos", map_key: "grave", rarity: "boss_dungeon", level_min: 28, hp: 480, atk: 58, def: 18, xp_gain: 280, gold_gain: 220 },
 
   // Desert
   { key: "scorpion", name: "Escorpião", map_key: "desert", rarity: "common", level_min: 32, hp: 230, atk: 35, def: 10, xp_gain: 160, gold_gain: 130 },

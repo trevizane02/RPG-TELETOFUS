@@ -45,14 +45,15 @@ export function registerDungeon(bot, deps) {
     plains: { name: "Masmorra da Planície", rooms: 3, xp: [400, 500, 600, 900], key: "dungeon_key", boneChance: 0.01, imageKey: "dungeon_plains" },
     forest: { name: "Masmorra da Floresta", rooms: 3, xp: [600, 800, 1000, 1400], key: "dungeon_key", boneChance: 0.01, imageKey: "dungeon_forest" },
     swamp: { name: "Masmorra do Pântano", rooms: 3, xp: [900, 1100, 1300, 2200], key: "dungeon_key", boneChance: 0.01, imageKey: "dungeon_swamp" },
-    special: { name: "Masmorra Especial", rooms: 3, xp: [1200, 1600, 2000, 3200], key: "bone_key", boneChance: 0.1, imageKey: "dungeon_special" },
+    special: { name: "Masmorra Especial", rooms: 3, xp: [1200, 1600, 2000, 3200], key: "bone_key", boneChance: 0.02, imageKey: "dungeon_special" },
   };
 
   function mapToDungeonKey(mapKey) {
     if (mapKey === "plains") return "plains";
     if (mapKey === "forest") return "forest";
     if (mapKey === "swamp") return "swamp";
-    return "special";
+    if (mapKey === "grave") return "special";
+    return null;
   }
 
   function genCode() {
@@ -171,6 +172,7 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
       code,
       name: base.def.name,
       mapKey: base.map.key,
+      dungeonKey: base.dungeonKey,
       mapName: base.map.name,
       def: base.def,
       ownerId: String(ctx.from.id),
@@ -414,6 +416,7 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
     const xpBase = session.def.xp[Math.min(floorIndex, session.def.xp.length - 1)] || 0;
     const xpTotal = Math.round(xpBase * (floor.scaling?.xpMult || 1));
     const partyMult = 1 + 0.4 * Math.max(0, aliveMembers.length - 1);
+    const isSpecial = session.dungeonKey === "special";
 
     // Contribuição separada para ataque/defesa
     const contribAtk = session.contributionAtk || new Map();
@@ -472,16 +475,12 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
           const bone = await giveItemByKey(player.id, "bone_key", 1);
           if (bone) loot.items.push(bone);
         }
-        if (session.mapKey === "special" && Math.random() < 0.05) {
+        if (isSpecial && Math.random() < 0.05) {
           const graveDrop = await maybeDropItem("grave", 3, true, { dungeon: true, playerClass: player.class, dropBonusPct: buff.drop || 0 });
           if (graveDrop && !SHOP_ONLY_KEYS.has(graveDrop.key)) {
             await awardItem(player.id, graveDrop);
             loot.items.push(graveDrop);
           }
-        }
-        if (session.mapKey === "special" && Math.random() < 0.02) {
-          const bone = await giveItemByKey(player.id, "bone_key", 1);
-          if (bone) loot.items.push(bone);
         }
       } else {
         const drop = await maybeDropItem(session.mapKey, Math.min(3, floorIndex + 1 + (floor.scaling?.tierBonus || 0)), false, { dungeon: true, playerClass: player.class, dropBonusPct: buff.drop || 0 });
