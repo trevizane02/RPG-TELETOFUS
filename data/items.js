@@ -44,6 +44,15 @@ export const ITEM_SEEDS = [
   { key: "platinum_amulet", name: "Colar de Platina", slot: "amulet", rarity: "uncommon", def_min: 1, def_max: 5, hp_min: 2, hp_max: 7, drop_rate: 0.01, map_key: "forest", boss_dungeon_only: true },
   { key: "iron_boots", name: "Bota de Ferro", slot: "boots", rarity: "uncommon", def_min: 5, def_max: 8, hp_min: 1, hp_max: 4, drop_rate: 0.01, map_key: "forest", boss_dungeon_only: true },
 
+  // Acessórios (Swamp) - boss do pântano (Hidra)
+  { key: "hydra_war_amulet", name: "Colar Pegajoso da Hidra", slot: "amulet", rarity: "legendary", def_min: 3, def_max: 6, hp_min: 8, hp_max: 14, drop_rate: 0.01, map_key: "swamp", boss_dungeon_only: true, class_req: "guerreiro", level_req: 20 },
+  { key: "hydra_arc_amulet", name: "Colar de Dentes da Hidra", slot: "amulet", rarity: "legendary", atk_min: 2, atk_max: 4, crit_min: 5, crit_max: 9, hp_min: 3, hp_max: 7, drop_rate: 0.01, map_key: "swamp", boss_dungeon_only: true, class_req: "arqueiro", level_req: 20 },
+  { key: "hydra_mag_amulet", name: "Colar da Cabeça da Hidra", slot: "amulet", rarity: "legendary", atk_min: 5, atk_max: 9, crit_min: 2, crit_max: 4, hp_min: 4, hp_max: 8, drop_rate: 0.01, map_key: "swamp", boss_dungeon_only: true, class_req: "mago", level_req: 20 },
+  { key: "hydra_war_ring", name: "Anel de Escamas da Hidra", slot: "ring", rarity: "legendary", def_min: 2, def_max: 4, hp_min: 6, hp_max: 10, drop_rate: 0.01, map_key: "swamp", boss_dungeon_only: true, class_req: "guerreiro", level_req: 20 },
+  { key: "hydra_arc_ring", name: "Anel da Hidra Caçadora", slot: "ring", rarity: "legendary", atk_min: 2, atk_max: 4, crit_min: 6, crit_max: 10, drop_rate: 0.01, map_key: "swamp", boss_dungeon_only: true, class_req: "arqueiro", level_req: 20 },
+  { key: "hydra_mag_ring", name: "Anel do Olho da Hidra", slot: "ring", rarity: "legendary", atk_min: 4, atk_max: 7, crit_min: 2, crit_max: 5, drop_rate: 0.01, map_key: "swamp", boss_dungeon_only: true, class_req: "mago", level_req: 20 },
+  { key: "boots_of_haste", name: "Boots of Haste", slot: "boots", rarity: "legendary", def_min: 7, def_max: 11, hp_min: 4, hp_max: 8, drop_rate: 0.002, map_key: "swamp", boss_dungeon_only: true },
+
   // Accessories
   { key: "amulet_health", name: "Amuleto Vital", slot: "amulet", rarity: "rare", hp_min: 15, hp_max: 30, drop_rate: 0.008, map_key: "desert" },
 
