@@ -830,7 +830,11 @@ async function awardItem(playerId, item) {
     `
     SELECT 
       (SELECT COUNT(*) FROM inventory WHERE player_id = $1 AND equipped = FALSE) as used,
-      COALESCE(p.inventory_slots_max, 20) as max
+      CASE
+        WHEN p.vip_until IS NOT NULL AND p.vip_until > NOW()
+          THEN GREATEST(COALESCE(p.inventory_slots_max, 20), 30)
+        ELSE COALESCE(p.inventory_slots_max, 20)
+      END as max
     FROM players p
     WHERE p.id = $1
   `,
@@ -862,7 +866,7 @@ async function awardItem(playerId, item) {
   
   // Valida limite de slots (para novos itens, não stacks)
   if (slotsUsed >= slotsMax) {
-    return { success: false, reason: 'inventory_full' };
+    return { success: false, reason: 'inventory_full', slotsUsed, slotsMax };
   }
   
   // Rola stats do item
@@ -1603,7 +1607,8 @@ async function startChest(ctx, player, map) {
     if (result.success) {
       lootMsg = `\n🎁 Item: ${item.name}`;
     } else if (result.reason === 'inventory_full') {
-      lootMsg = `\n❌ Inventário cheio! Item ${item.name} foi perdido.`;
+      const slotsText = result.slotsMax ? ` (${result.slotsUsed}/${result.slotsMax})` : "";
+      lootMsg = `\n❌ Inventário cheio${slotsText}! Item ${item.name} foi perdido.`;
     }
   }
   // Chance extra de poção de energia
@@ -1795,7 +1800,8 @@ async function handleAttack(ctx) {
         itemMsg = `\n🎁 Item: ${item.name}${statsText}`;
         lootImage = item.image_file_id || EVENT_IMAGES.loot_item || lootImage;
       } else if (result.reason === 'inventory_full') {
-        itemMsg = `\n❌ Inventário cheio (20/20)! Item ${item.name} foi perdido.`;
+        const slotsText = result.slotsMax ? ` (${result.slotsUsed}/${result.slotsMax})` : "";
+        itemMsg = `\n❌ Inventário cheio${slotsText}! Item ${item.name} foi perdido.`;
       }
     } else if (fight.mobGold > 0 && EVENT_IMAGES.loot_gold) {
       lootImage = EVENT_IMAGES.loot_gold;
