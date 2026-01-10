@@ -41,6 +41,7 @@ const STATES = {
   TRAVEL: "TRAVEL",
   RUN: "RUN",
   COMBAT: "COMBAT",
+  DUNGEON: "DUNGEON",
   INVENTORY: "INVENTORY",
   CLASS: "CLASS",
   RENAME: "RENAME",
@@ -345,7 +346,7 @@ async function getPlayerStats(player) {
   );
 
   const bonus = res.rows[0] || { atk_bonus: 0, def_bonus: 0, hp_bonus: 0, crit_bonus: 0 };
-  const total_hp = Math.max(player.hp || 0, player.hp_max + Number(bonus.hp_bonus || 0) + lvlHp);
+  const total_hp = Math.floor(Math.max(player.hp || 0, player.hp_max + Number(bonus.hp_bonus || 0) + lvlHp));
   return {
     total_atk: player.base_atk + Number(bonus.atk_bonus || 0) + (buff.atk || 0) + lvlAtk,
     total_def: player.base_def + Number(bonus.def_bonus || 0) + (buff.def || 0) + lvlDef,
@@ -478,10 +479,10 @@ async function consumeItem(playerId, itemKey, qty = 1) {
 
 async function hasItemQty(playerId, itemKey, qty = 1) {
   const res = await pool.query(
-    "SELECT qty FROM inventory WHERE player_id = $1 AND item_key = $2",
+    "SELECT COALESCE(SUM(qty),0) as qty FROM inventory WHERE player_id = $1 AND item_key = $2",
     [playerId, itemKey]
   );
-  return res.rows.length > 0 && Number(res.rows[0].qty) >= qty;
+  return Number(res.rows[0]?.qty || 0) >= qty;
 }
 
 async function getItemQty(playerId, itemKey) {
@@ -1284,6 +1285,8 @@ async function renderProfile(ctx) {
   const stats = await getPlayerStats(player);
   const lvlInfo = await getLevelFromTotalXp(player.xp_total);
   const xpBar = makeBar(player.xp_total - lvlInfo.level_xp_start, lvlInfo.xp_to_next || 1, 10);
+  const xpIntoLevel = player.xp_total - lvlInfo.level_xp_start;
+  const xpRemaining = lvlInfo.xp_to_next ? Math.max(0, lvlInfo.xp_to_next - xpIntoLevel) : 0;
   const map = await getMapByKey(player.current_map_key);
   const buffRemaining = formatBuffRemaining(player.temp_buff_expires_at) || "até acabar";
   const buffText =
@@ -1297,7 +1300,7 @@ async function renderProfile(ctx) {
   const caption =
     `<b>📜 ${name}</b>\n` +
     `Classe: ${className}\n` +
-    `Lv ${lvlInfo.level}  XP: ${player.xp_total}${lvlInfo.xp_to_next ? ` (Próx: ${lvlInfo.xp_to_next})` : ""}\n${xpBar}\n\n` +
+    `Lv ${lvlInfo.level}  XP: ${player.xp_total}${lvlInfo.xp_to_next ? ` (Faltam: ${xpRemaining})` : ""}\n${xpBar}\n\n` +
     `⚔️ ATK ${stats.total_atk}  🛡️ DEF ${stats.total_def}  🎯 CRIT ${stats.total_crit}%\n` +
     `❤️ HP: ${player.hp}/${stats.total_hp} ${makeBar(player.hp, stats.total_hp, 8)}\n` +
     `⚡ Energia: ${player.energy}/${player.energy_max}\n` +
@@ -1323,6 +1326,15 @@ async function renderInventory(ctx, filter = "armas", page = 1) {
   }
   const userId = String(ctx.from.id);
   const player = await getPlayer(userId, ctx.from.first_name);
+  if (player.state === STATES.DUNGEON) {
+    const msg = "Você está em uma masmorra. Use Consumíveis durante o turno.";
+    if (ctx.callbackQuery) {
+      await ctx.answerCbQuery(msg, { show_alert: true }).catch(() => {});
+    } else {
+      await ctx.reply(msg);
+    }
+    return;
+  }
   await setPlayerState(player.id, STATES.INVENTORY);
   const stats = await getPlayerStats(player);
 
@@ -2096,6 +2108,9 @@ bot.command("usar", async (ctx) => {
   if (!itemKey) return ctx.reply("Use: /usar <item_key>");
   const userId = String(ctx.from.id);
   const player = await getPlayer(userId, ctx.from.first_name);
+  if (player.state === STATES.DUNGEON) {
+    return ctx.reply("Você está em uma masmorra. Use Consumíveis durante o turno.");
+  }
   const res = await useConsumable(player, itemKey);
   if (!res.ok) return ctx.reply(res.message);
   await ctx.reply(res.message, Markup.inlineKeyboard([[Markup.button.callback("🏠 Menu", "menu")]]));
@@ -2105,6 +2120,10 @@ bot.action(/usec_(.+)/, async (ctx) => {
   const key = ctx.match[1];
   const userId = String(ctx.from.id);
   const player = await getPlayer(userId, ctx.from.first_name);
+  if (player.state === STATES.DUNGEON) {
+    await ctx.answerCbQuery("Você está em uma masmorra. Use Consumíveis durante o turno.", { show_alert: true }).catch(() => {});
+    return;
+  }
   const res = await useConsumable(player, key);
   if (!res.ok) {
     await ctx.answerCbQuery(res.message, { show_alert: true });
@@ -2285,7 +2304,9 @@ bot.action("merch_buy", async (ctx) => {
     return;
   }
 
-  await pool.query("UPDATE players SET gold = gold - $1, hp = hp_max WHERE id = $2", [event.cost, player.id]);
+  const stats = await getPlayerStats(player);
+  const targetHp = Math.round(stats.total_hp || 0);
+  await pool.query("UPDATE players SET gold = gold - $1, hp = $2 WHERE id = $3", [event.cost, targetHp, player.id]);
   events.delete(userId);
   await setPlayerState(player.id, STATES.MENU);
 

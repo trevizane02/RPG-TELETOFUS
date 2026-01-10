@@ -31,12 +31,10 @@ const CHEST_REWARDS = {
   common: [
     { type: "item", key: "energy_potion", qty: [1, 3], weight: 50 },
     { type: "item", key: "health_potion", qty: [2, 5], weight: 30 },
-    { type: "item", key: "dungeon_key", qty: [1, 1], weight: 20 },
   ],
   uncommon: [
     { type: "item", key: "energy_potion", qty: [2, 4], weight: 35 },
     { type: "item", key: "health_potion", qty: [3, 8], weight: 25 },
-    { type: "item", key: "dungeon_key", qty: [2, 3], weight: 25 },
     { type: "gold", amount: [300, 600], weight: 15 },
   ],
   legendary: [

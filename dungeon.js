@@ -27,6 +27,7 @@ export function registerDungeon(bot, deps) {
   const pendingPasswords = new Map(); // userId -> { mode: 'create'|'join', code?, digits: '' }
 
   const TURN_TIMEOUT = 20000;
+  const SOLO_XP_MULT = 0.7;
   const ACTION_ICONS = {
     attack: "⚔️",
     defend: "🛡️",
@@ -164,7 +165,6 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
         await ctx.reply("Você precisa de 1 Chave de Ossos para criar a Masmorra Especial.");
         return;
       }
-      await consumeItem(base.player.id, "bone_key", 1);
     }
     const code = genCode();
     const stats = await getPlayerStats(base.player);
@@ -368,7 +368,7 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
       const member = session.memberData.get(uid);
       if (!member?.alive) continue;
       if (!session.playerActions.has(uid)) {
-        session.playerActions.set(uid, { action: "attack", icon: ACTION_ICONS.attack, auto: true });
+        session.playerActions.set(uid, { action: "wait", icon: ACTION_ICONS.wait, auto: true });
       }
     }
     await updateDungeonScreen(session);
@@ -414,7 +414,7 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
     const aliveMembers = [...session.members].filter((uid) => session.memberData.get(uid)?.alive);
     const drops = new Map();
     const xpBase = session.def.xp[Math.min(floorIndex, session.def.xp.length - 1)] || 0;
-    const xpTotal = Math.round(xpBase * (floor.scaling?.xpMult || 1));
+    const xpTotal = Math.round(xpBase * (floor.scaling?.xpMult || 1) * (aliveMembers.length === 1 ? SOLO_XP_MULT : 1));
     const partyMult = 1 + 0.4 * Math.max(0, aliveMembers.length - 1);
     const isSpecial = session.dungeonKey === "special";
 
@@ -609,6 +609,10 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
     const aliveMembers = [...session.members].filter((uid) => session.memberData.get(uid)?.alive);
     if (!aliveMembers.length) {
       session.state = "finished";
+      for (const uid of session.members) {
+        const player = await getPlayer(uid);
+        await setPlayerState(player.id, STATES.MENU);
+      }
       sessions.delete(session.code);
       return;
     }
@@ -617,7 +621,7 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
     const defenders = [];
     const turnEvents = [];
     for (const uid of aliveMembers) {
-      const action = session.playerActions.get(uid) || { action: "attack" };
+      const action = session.playerActions.get(uid) || { action: "wait" };
       const player = await getPlayer(uid);
       const stats = await getPlayerStats(player);
       if (action.action === "attack") {
@@ -639,6 +643,9 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
         await useConsumable(player, action.itemKey);
         const md = session.memberData.get(uid);
         turnEvents.push(`🧪 ${md.name} usa consumível`);
+      } else if (action.action === "wait") {
+        const md = session.memberData.get(uid);
+        turnEvents.push(`⌛ ${md.name} perdeu a vez`);
       }
     }
 
@@ -705,6 +712,10 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
     session.contributionAtk = new Map();
     session.contributionDef = new Map();
     session.turnTimer = null;
+    for (const uid of session.members) {
+      const player = await getPlayer(uid);
+      await setPlayerState(player.id, STATES.DUNGEON);
+    }
     await generateDungeonFloors(session);
     await ctx.answerCbQuery().catch(() => {});
     await startNewTurn(session);
@@ -925,6 +936,8 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
     session.members.delete(userId);
     session.memberData.delete(userId);
     session.messageIds.delete(userId);
+    const exiting = await getPlayer(userId);
+    await setPlayerState(exiting.id, STATES.MENU);
     await ctx.answerCbQuery("👋 Você saiu da dungeon");
     try {
       await ctx.deleteMessage();
@@ -959,6 +972,8 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
     session.members.delete(uid);
     session.memberData.delete(uid);
     session.messageIds.delete(uid);
+    const leaving = await getPlayer(uid);
+    await setPlayerState(leaving.id, STATES.MENU);
     await ctx.answerCbQuery("Saiu").catch(() => {});
     await bot.telegram
       .sendMessage(uid, "Você saiu da masmorra.", { reply_markup: Markup.inlineKeyboard([[Markup.button.callback("🏠 Menu", "menu")]]).reply_markup })
