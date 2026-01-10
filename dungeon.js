@@ -27,6 +27,7 @@ export function registerDungeon(bot, deps) {
   const pendingPasswords = new Map(); // userId -> { mode: 'create'|'join', code?, digits: '' }
 
   const TURN_TIMEOUT = 20000;
+  const TURN_GRACE_MS = 5000;
   const SOLO_XP_MULT = 0.7;
   const ACTION_ICONS = {
     attack: "⚔️",
@@ -187,6 +188,8 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
       turnStartTime: null,
       turnSeq: 0,
       renderChain: null,
+      turnExtraMs: 0,
+      turnExtended: false,
       messageIds: new Map(),
       totalDrops: new Map(),
       mapImage: null,
@@ -283,7 +286,8 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
     const floor = session.floors[session.currentFloor];
     if (!floor) return { caption: "Dungeon encerrada.", keyboard: [[Markup.button.callback("🏠 Menu", "menu")]] };
     const mob = floor.mob;
-    const remaining = session.turnStartTime ? Math.max(0, Math.ceil((TURN_TIMEOUT - (Date.now() - session.turnStartTime)) / 1000)) : TURN_TIMEOUT / 1000;
+    const totalMs = TURN_TIMEOUT + (session.turnExtraMs || 0);
+    const remaining = session.turnStartTime ? Math.max(0, Math.ceil((totalMs - (Date.now() - session.turnStartTime)) / 1000)) : Math.ceil(totalMs / 1000);
     const turnSeq = session.turnSeq || 0;
     const lines = [];
     lines.push(`🗝️ ${session.name}`);
@@ -328,9 +332,8 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
         const floor = session.floors[session.currentFloor];
         const content = renderDungeonState(session);
         const fileId = floor?.mob?.image || session.mapImage;
-        for (const uid of session.members) {
-          await sendOrEditCard(uid, { ...content, fileId }, session);
-        }
+        const tasks = [...session.members].map((uid) => sendOrEditCard(uid, { ...content, fileId }, session));
+        await Promise.all(tasks);
       })
       .catch((err) => {
         console.error("updateDungeonScreen error:", err.message);
@@ -365,6 +368,8 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
       await deleteConsumablePrompt(session, uid);
     }
     session.turnSeq = (session.turnSeq || 0) + 1;
+    session.turnExtraMs = 0;
+    session.turnExtended = false;
     session.turnStartTime = Date.now();
     session.turnTimer = setTimeout(async () => {
       await autoResolveTurn(session);
@@ -375,6 +380,16 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
   async function autoResolveTurn(session) {
     const floor = session.floors[session.currentFloor];
     if (!floor || session.state !== "running" || session.resolvingTurn) return;
+    const hasPendingCons = [...session.playerActions.values()].some((action) => action.action === "cons_pending");
+    if (!session.turnExtended && (session.consumablePrompts?.size || hasPendingCons)) {
+      session.turnExtended = true;
+      session.turnExtraMs = (session.turnExtraMs || 0) + TURN_GRACE_MS;
+      session.turnTimer = setTimeout(async () => {
+        await autoResolveTurn(session);
+      }, TURN_GRACE_MS);
+      await updateDungeonScreen(session);
+      return;
+    }
     for (const uid of session.members) {
       const member = session.memberData.get(uid);
       if (!member?.alive) continue;
@@ -654,6 +669,9 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
         await useConsumable(player, action.itemKey);
         const md = session.memberData.get(uid);
         turnEvents.push(`🧪 ${md.name} usa consumível`);
+      } else if (action.action === "cons_pending") {
+        const md = session.memberData.get(uid);
+        turnEvents.push(`⌛ ${md.name} perdeu a vez`);
       } else if (action.action === "wait") {
         const md = session.memberData.get(uid);
         turnEvents.push(`⌛ ${md.name} perdeu a vez`);
@@ -1012,17 +1030,23 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
     if (!turn || turn !== (session.turnSeq || 0)) {
       return ctx.answerCbQuery("⏱️ Turno expirou", { show_alert: true }).catch(() => {});
     }
+    if (session.resolvingTurn) {
+      return ctx.answerCbQuery("⏳ Turno resolvendo", { show_alert: true }).catch(() => {});
+    }
 
     if (session.playerActions.has(uid)) return ctx.answerCbQuery("⏳ Aguarde o turno resolver").catch(() => {});
 
     if (act === "cons") {
+      session.playerActions.set(uid, { action: "cons_pending", icon: ACTION_ICONS.cons });
       const player = await getPlayer(uid);
       const items = await pool.query(
         `SELECT inv.item_key, SUM(inv.qty)::int AS qty, i.name FROM inventory inv JOIN items i ON i.key = inv.item_key WHERE inv.player_id = $1 AND inv.slot = 'consumable' AND inv.qty > 0 GROUP BY inv.item_key, i.name ORDER BY i.name`,
         [player.id]
       );
       if (!items.rows.length) {
+        session.playerActions.delete(uid);
         await ctx.answerCbQuery("Sem consumíveis").catch(() => {});
+        await updateDungeonScreen(session);
         return;
       }
       const turnSeq = session.turnSeq || 0;
@@ -1031,6 +1055,7 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
       const sent = await ctx.reply("🧪 Escolha um consumível (gasta o turno):", { reply_markup: Markup.inlineKeyboard(kb).reply_markup });
       if (sent?.message_id) session.consumablePrompts.set(uid, sent.message_id);
       await ctx.answerCbQuery().catch(() => {});
+      await updateDungeonScreen(session);
       return;
     }
 
@@ -1081,7 +1106,13 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
     if (!turn || turn !== (session.turnSeq || 0)) {
       return ctx.answerCbQuery("⏱️ Turno expirou", { show_alert: true }).catch(() => {});
     }
-    if (session.playerActions.has(uid)) return ctx.answerCbQuery("⏳ Você já escolheu").catch(() => {});
+    if (session.resolvingTurn) {
+      return ctx.answerCbQuery("⏳ Turno resolvendo", { show_alert: true }).catch(() => {});
+    }
+    const currentAction = session.playerActions.get(uid);
+    if (currentAction && currentAction.action !== "cons_pending") {
+      return ctx.answerCbQuery("⏳ Você já escolheu").catch(() => {});
+    }
     const player = await getPlayer(uid);
     const result = await useConsumable(player, itemKey);
     if (!result.ok) {
