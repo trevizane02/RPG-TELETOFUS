@@ -1973,6 +1973,9 @@ bot.action("energia", renderEnergy);
 bot.command("descansar", async (ctx) => {
   const userId = String(ctx.from.id);
   const player = await getPlayer(userId, ctx.from.first_name);
+  if (player.state === STATES.DUNGEON) {
+    return ctx.reply("Você está em uma masmorra. Use Consumíveis durante o turno.");
+  }
   const stats = await getPlayerStats(player);
   if (player.energy < 1) return ctx.reply("⚠️ Sem energia para descansar.");
   const targetHp = Math.round(stats.total_hp || 0);
@@ -1983,6 +1986,10 @@ bot.command("descansar", async (ctx) => {
 bot.action("descansar", async (ctx) => {
   const userId = String(ctx.from.id);
   const player = await getPlayer(userId, ctx.from.first_name);
+  if (player.state === STATES.DUNGEON) {
+    await ctx.answerCbQuery("Você está em uma masmorra. Use Consumíveis durante o turno.", { show_alert: true }).catch(() => {});
+    return;
+  }
   const stats = await getPlayerStats(player);
   if (player.energy < 1) {
     await ctx.answerCbQuery("Sem energia");
@@ -2304,6 +2311,13 @@ bot.action("merch_buy", async (ctx) => {
   }
 
   const player = await getPlayer(userId, ctx.from.first_name);
+  if (player.state === STATES.DUNGEON) {
+    events.delete(userId);
+    if (ctx.callbackQuery) {
+      await ctx.answerCbQuery("Você está em uma masmorra. Use Consumíveis durante o turno.", { show_alert: true }).catch(() => {});
+    }
+    return;
+  }
   if (player.gold < event.cost) {
     await ctx.reply("🚫 Gold insuficiente!");
     if (ctx.callbackQuery) ctx.answerCbQuery("Sem gold");
@@ -2324,6 +2338,12 @@ bot.action("merch_ignore", async (ctx) => {
   const userId = String(ctx.from.id);
   events.delete(userId);
   const player = await getPlayer(userId, ctx.from.first_name);
+  if (player.state === STATES.DUNGEON) {
+    if (ctx.callbackQuery) {
+      await ctx.answerCbQuery("Você está em uma masmorra. Use Consumíveis durante o turno.", { show_alert: true }).catch(() => {});
+    }
+    return;
+  }
   await setPlayerState(player.id, STATES.MENU);
   await ctx.reply("Você ignorou o mercador.", Markup.inlineKeyboard([[Markup.button.callback("⚔️ Caçar de novo", "action_hunt"), Markup.button.callback("🏠 Menu", "menu")]]));
   if (ctx.callbackQuery) ctx.answerCbQuery();
