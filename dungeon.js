@@ -26,8 +26,7 @@ export function registerDungeon(bot, deps) {
   const exitConfirmations = new Map(); // userId -> expires
   const pendingPasswords = new Map(); // userId -> { mode: 'create'|'join', code?, digits: '' }
 
-  const TURN_TIMEOUT = 20000;
-  const TURN_GRACE_MS = 5000;
+  const TURN_TIMEOUT = 35000;
   const SOLO_XP_MULT = 0.7;
   const ACTION_ICONS = {
     attack: "⚔️",
@@ -188,8 +187,6 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
       turnStartTime: null,
       turnSeq: 0,
       renderChain: null,
-      turnExtraMs: 0,
-      turnExtended: false,
       messageIds: new Map(),
       totalDrops: new Map(),
       mapImage: null,
@@ -286,8 +283,7 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
     const floor = session.floors[session.currentFloor];
     if (!floor) return { caption: "Dungeon encerrada.", keyboard: [[Markup.button.callback("🏠 Menu", "menu")]] };
     const mob = floor.mob;
-    const totalMs = TURN_TIMEOUT + (session.turnExtraMs || 0);
-    const remaining = session.turnStartTime ? Math.max(0, Math.ceil((totalMs - (Date.now() - session.turnStartTime)) / 1000)) : Math.ceil(totalMs / 1000);
+    const remaining = session.turnStartTime ? Math.max(0, Math.ceil((TURN_TIMEOUT - (Date.now() - session.turnStartTime)) / 1000)) : TURN_TIMEOUT / 1000;
     const turnSeq = session.turnSeq || 0;
     const lines = [];
     lines.push(`🗝️ ${session.name}`);
@@ -368,8 +364,6 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
       await deleteConsumablePrompt(session, uid);
     }
     session.turnSeq = (session.turnSeq || 0) + 1;
-    session.turnExtraMs = 0;
-    session.turnExtended = false;
     session.turnStartTime = Date.now();
     session.turnTimer = setTimeout(async () => {
       await autoResolveTurn(session);
@@ -380,16 +374,6 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
   async function autoResolveTurn(session) {
     const floor = session.floors[session.currentFloor];
     if (!floor || session.state !== "running" || session.resolvingTurn) return;
-    const hasPendingCons = [...session.playerActions.values()].some((action) => action.action === "cons_pending");
-    if (!session.turnExtended && (session.consumablePrompts?.size || hasPendingCons)) {
-      session.turnExtended = true;
-      session.turnExtraMs = (session.turnExtraMs || 0) + TURN_GRACE_MS;
-      session.turnTimer = setTimeout(async () => {
-        await autoResolveTurn(session);
-      }, TURN_GRACE_MS);
-      await updateDungeonScreen(session);
-      return;
-    }
     for (const uid of session.members) {
       const member = session.memberData.get(uid);
       if (!member?.alive) continue;
