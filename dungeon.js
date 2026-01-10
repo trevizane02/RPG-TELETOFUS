@@ -1066,7 +1066,7 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
       session.playerActions.set(uid, { action: "defend", icon: ACTION_ICONS.defend, defBonus });
       await ctx.answerCbQuery("🛡️ Defendendo! (+50% DEF)").catch(() => {});
       await updateDungeonScreen(session);
-      if (session.playerActions.size >= aliveCount(session) && !session.resolvingTurn) await resolveCombatTurn(session);
+      if (finalActionCount(session) >= aliveCount(session) && !session.resolvingTurn) await resolveCombatTurn(session);
       return;
     }
 
@@ -1074,7 +1074,7 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
     await ctx.answerCbQuery("Ação registrada").catch(() => {});
     await updateDungeonScreen(session);
 
-    if (session.playerActions.size >= aliveCount(session) && !session.resolvingTurn) {
+    if (finalActionCount(session) >= aliveCount(session) && !session.resolvingTurn) {
       await resolveCombatTurn(session);
     }
   });
@@ -1115,10 +1115,21 @@ Comandos: Pronto/Despronto, Iniciar (líder)`;
     session.playerActions.set(uid, { action: "cons", icon: ACTION_ICONS.cons, itemKey });
     await ctx.answerCbQuery("Consumido").catch(() => {});
     await updateDungeonScreen(session);
-    if (session.playerActions.size >= aliveCount(session) && !session.resolvingTurn) {
+    if (finalActionCount(session) >= aliveCount(session) && !session.resolvingTurn) {
       await resolveCombatTurn(session);
     }
   });
+
+  function finalActionCount(session) {
+    let count = 0;
+    for (const uid of session.members) {
+      const md = session.memberData.get(uid);
+      if (!md?.alive) continue;
+      const action = session.playerActions.get(uid);
+      if (action && action.action !== "cons_pending") count += 1;
+    }
+    return count;
+  }
 
   function aliveCount(session) {
     return [...session.members].filter((id) => session.memberData.get(id)?.alive).length;
